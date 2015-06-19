@@ -1,0 +1,25 @@
+language: python
+python:
+  - "2.6"
+  - "2.7"
+env:
+  # Test against the latest version of Twisted.
+  - TWISTED_VERSION="Twisted"
+matrix:
+  include:
+    # Test against the oldest version of Twisted that we claim to support
+    # This is a separate matrix inclusion to avoid spawning unnecessary builds.
+    - python: "2.7"
+      env: TWISTED_VERSION="Twisted==13.1.0"
+    # Test on pypy without coverage, because it's unnecessary and very slow.
+    - python: "pypy"
+      env: TWISTED_VERSION="Twisted" NO_COVERAGE="1"
+install:
+  - "pip install ${TWISTED_VERSION}"
+  - "pip install -r requirements.txt --use-wheel"
+  - "pip install coveralls --use-wheel"
+script:
+  - if [ -z "$NO_COVERAGE" ]; then COVERAGE_CMD="coverage run --source=vxyowsup"; else COVERAGE_CMD=""; fi
+  - VUMITEST_REDIS_DB=1 $COVERAGE_CMD `which trial` vxyowsup
+after_success:
+  - if [ -z "$NO_COVERAGE" ]; then coveralls; fi
