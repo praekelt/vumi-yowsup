@@ -39,3 +39,28 @@ class WhatsAppTransport(Transport):
             return self.publish_nack(message['message_id'], 'failed')
         return self.publish_ack(message['message_id'], 
             'remote-message-id')
+            
+class EchoLayer(YowInterfaceLayer):
+
+    @ProtocolEntityCallback("message")
+    def onMessage(self, messageProtocolEntity):
+        receipt = OutgoingReceiptProtocolEntity(
+            messageProtocolEntity.getId(), 
+            messageProtocolEntity.getFrom(), 'read', 
+            messageProtocolEntity.getParticipant())
+
+        outgoingMessageProtocolEntity = TextMessageProtocolEntity(
+            messageProtocolEntity.getBody(),
+            to = messageProtocolEntity.getFrom())
+
+        self.toLower(receipt)
+
+        self.toLower(outgoingMessageProtocolEntity)
+        print(messageProtocolEntity.getBody())
+
+    @ProtocolEntityCallback("receipt")
+    def onReceipt(self, entity):
+        ack = OutgoingAckProtocolEntity(entity.getId(), "receipt", 
+            "delivery", entity.getFrom())
+        self.toLower(ack)
+
