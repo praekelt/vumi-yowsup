@@ -42,8 +42,11 @@ class WhatsAppTransport(Transport):
         config = self.get_static_config()
         log.info('Transport starting with: %s' % (config,))
         CREDENTIALS = (config.phone, config.password)
+
+        client = Client(CREDENTIALS)
         
-        return defer.succeed(1)
+        self.client_d = deferToThread(client.client_start)
+        self.client_d.addErrback(self.print_error)
 
     def teardown_transport(self):
         return defer.succeed(1)
@@ -55,6 +58,11 @@ class WhatsAppTransport(Transport):
             return self.publish_nack(message['message_id'], 'failed')
         return self.publish_ack(message['message_id'], 
             'remote-message-id')
+            
+            
+    def print_error(self, f):
+        print f
+        return f
             
 class Client:
     def __init__(self, credentials):
