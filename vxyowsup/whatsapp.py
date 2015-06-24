@@ -1,4 +1,4 @@
-# -*- test-case-name: vumi.transports.parlayx.tests.test_parlayx -*-
+# -*- test-case-name: vumi.transports.whatsapp.tests.test_whatsapp -*-
 from twisted.internet import defer
 
 from vumi.transports.base import Transport
@@ -6,15 +6,15 @@ from vumi.config import ConfigText
 from vumi import log
 
 
-class ParlayXTransportConfig(Transport.CONFIG_CLASS):
+class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
     extra_config = ConfigText('Some Config var', default='foo',
                               static=True)
 
 
-class ParlayXTransport(Transport):
+class WhatsAppTransport(Transport):
 
-    CONFIG_CLASS = ParlayXTransportConfig
-    transport_type = 'sms'
+    CONFIG_CLASS = WhatsAppTransportConfig
+    transport_type = 'whatsapp'
 
     def setup_transport(self):
         config = self.get_static_config()
