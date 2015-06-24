@@ -7,8 +7,14 @@ from vumi import log
 
 
 class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
-    extra_config = ConfigText('Some Config var', default='foo',
-                              static=True)
+    cc = ConfigText('Country code of host phone number', default='27', 
+        static=True)
+    phone = ConfigText(
+        'Phone number, excluding "+", including country code', 
+        static=True)
+    password = ConfigText(
+        'Password received from WhatsApp on yowsup registration', 
+        static=True) 
 
 
 class WhatsAppTransport(Transport):
@@ -18,7 +24,9 @@ class WhatsAppTransport(Transport):
 
     def setup_transport(self):
         config = self.get_static_config()
-        log.info('Transport starting with: %s' % (config.extra_config,))
+        log.info('Transport starting with: %s' % (config,))
+        CREDENTIALS = (config.phone, config.password)
+        
         return defer.succeed(1)
 
     def teardown_transport(self):
@@ -29,4 +37,5 @@ class WhatsAppTransport(Transport):
         log.info('Sending %r' % (message.to_json(),))
         if message['content'] == 'fail!':
             return self.publish_nack(message['message_id'], 'failed')
-        return self.publish_ack(message['message_id'], 'remote-message-id')
+        return self.publish_ack(message['message_id'], 
+            'remote-message-id')
