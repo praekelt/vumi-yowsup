@@ -21,16 +21,20 @@ from yowsup.layers.protocol_receipts.protocolentities  import OutgoingReceiptPro
 from yowsup.layers.protocol_acks.protocolentities      import OutgoingAckProtocolEntity
 
 
-
 class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
-    cc = ConfigText('Country code of host phone number', default='27', 
-        static=True)
+    cc = ConfigText(
+        'Country code of host phone number',
+        default='27', static=True)
     phone = ConfigText(
-        'Phone number, excluding "+", including country code', 
+        'Phone number, excluding "+", including country code',
         static=True)
     password = ConfigText(
-        'Password received from WhatsApp on yowsup registration', 
-        static=True) 
+        'Password received from WhatsApp on yowsup registration',
+        static=True)
+
+
+class WhatsAppClientDone(Exception):
+    """ Signal that the Yowsup client is done. """
 
 
 class WhatsAppTransport(Transport):
@@ -43,56 +47,79 @@ class WhatsAppTransport(Transport):
         log.info('Transport starting with: %s' % (config,))
         CREDENTIALS = (config.phone, config.password)
 
-        client = Client(CREDENTIALS)
-        
+        client = self.client = Client(CREDENTIALS)
+
         self.client_d = deferToThread(client.client_start)
+        self.client_d.addErrback(self.catch_exit)
         self.client_d.addErrback(self.print_error)
 
+    @defer.inlineCallbacks
     def teardown_transport(self):
-        return defer.succeed(1)
+        print "Stopping client ..."
+        self.client.client_stop()
+        print "Stop sent."
+        print "Waiting for asyncore loop to exit ..."
+        yield self.client_d
+        print "Loop done."
 
     def handle_outbound_message(self, message):
         # message is a vumi.message.TransportUserMessage
         log.info('Sending %r' % (message.to_json(),))
         if message['content'] == 'fail!':
             return self.publish_nack(message['message_id'], 'failed')
-        return self.publish_ack(message['message_id'], 
-            'remote-message-id')
-            
-            
+            return self.publish_ack(
+                message['message_id'], 'remote-message-id')
+
+    def catch_exit(self, f):
+        f.trap(WhatsAppClientDone)
+        print "Yowsup client killed."
+
     def print_error(self, f):
         print f
         return f
-            
-class Client:
+
+
+class Client(object):
     def __init__(self, credentials):
         self.CREDENTIALS = credentials
-    
+
     def client_start(self):
-	
-        self.stack = YowStackBuilder.getDefaultStack(layer=EchoLayer, 
-            media=False)
+        self.stack = YowStackBuilder.getDefaultStack(
+            layer=EchoLayer, media=False)
         self.stack.setCredentials(self.CREDENTIALS)
         self.network_layer = self.stack.getLayer(0)
-        
-        self.stack.broadcastEvent(YowLayerEvent(
-            YowNetworkLayer.EVENT_STATE_CONNECT))  
-            
-        self.stack.loop(discrete=0, timeout=1)
 
-            
+        self.stack.broadcastEvent(YowLayerEvent(
+            YowNetworkLayer.EVENT_STATE_CONNECT))
+        self.stack.loop(discrete=0, count=1, timeout=1)
+
+    def client_stop(self):
+        print "Stopping client ..."
+
+        def _stop():
+            print "Sending disconnect ..."
+            self.stack.broadcastEvent(YowLayerEvent(
+                YowNetworkLayer.EVENT_STATE_DISCONNECT))
+
+        def _kill():
+            raise WhatsAppClientDone("We are exiting NOW!")
+
+        self.stack.execDetached(_stop)
+        self.stack.execDetached(_kill)
+
+
 class EchoLayer(YowInterfaceLayer):
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
         receipt = OutgoingReceiptProtocolEntity(
-            messageProtocolEntity.getId(), 
-            messageProtocolEntity.getFrom(), 'read', 
+            messageProtocolEntity.getId(),
+            messageProtocolEntity.getFrom(), 'read',
             messageProtocolEntity.getParticipant())
 
         outgoingMessageProtocolEntity = TextMessageProtocolEntity(
             messageProtocolEntity.getBody(),
-            to = messageProtocolEntity.getFrom())
+            to=messageProtocolEntity.getFrom())
 
         self.toLower(receipt)
 
@@ -101,8 +128,6 @@ class EchoLayer(YowInterfaceLayer):
 
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
-        ack = OutgoingAckProtocolEntity(entity.getId(), "receipt", 
-            "delivery", entity.getFrom())
+        ack = OutgoingAckProtocolEntity(
+            entity.getId(), "receipt", "delivery", entity.getFrom())
         self.toLower(ack)
-        
-
