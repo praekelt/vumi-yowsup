@@ -33,6 +33,10 @@ class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
         static=True)
 
 
+class WhatsAppClientDone(Exception):
+    """ Signal that the Yowsup client is done. """
+
+
 class WhatsAppTransport(Transport):
 
     CONFIG_CLASS = WhatsAppTransportConfig
@@ -46,8 +50,10 @@ class WhatsAppTransport(Transport):
         client = self.client = Client(CREDENTIALS)
 
         self.client_d = deferToThread(client.client_start)
+        self.client_d.addErrback(self.catch_exit)
         self.client_d.addErrback(self.print_error)
 
+    @defer.inlineCallbacks
     def teardown_transport(self):
         print "Stopping client ..."
         self.client.client_stop()
@@ -63,6 +69,10 @@ class WhatsAppTransport(Transport):
             return self.publish_nack(message['message_id'], 'failed')
             return self.publish_ack(
                 message['message_id'], 'remote-message-id')
+
+    def catch_exit(self, f):
+        f.trap(WhatsAppClientDone)
+        print "Yowsup client killed."
 
     def print_error(self, f):
         print f
@@ -81,12 +91,21 @@ class Client(object):
 
         self.stack.broadcastEvent(YowLayerEvent(
             YowNetworkLayer.EVENT_STATE_CONNECT))
-        self.stack.loop(discrete=0, timeout=1)
+        self.stack.loop(discrete=0, count=1, timeout=1)
 
     def client_stop(self):
         print "Stopping client ..."
-        self.stack.broadcastEvent(YowLayerEvent(
-            YowNetworkLayer.EVENT_STATE_DISCONNECT))
+
+        def _stop():
+            print "Sending disconnect ..."
+            self.stack.broadcastEvent(YowLayerEvent(
+                YowNetworkLayer.EVENT_STATE_DISCONNECT))
+
+        def _kill():
+            raise WhatsAppClientDone("We are exiting NOW!")
+
+        self.stack.execDetached(_stop)
+        self.stack.execDetached(_kill)
 
 
 class EchoLayer(YowInterfaceLayer):
