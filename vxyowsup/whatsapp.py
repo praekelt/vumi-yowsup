@@ -1,9 +1,25 @@
 # -*- test-case-name: vumi.transports.whatsapp.tests.test_whatsapp -*-
 from twisted.internet import defer
+from twisted.internet.threads import deferToThread
 
 from vumi.transports.base import Transport
 from vumi.config import ConfigText
 from vumi import log
+
+from yowsup.layers.network                             import YowNetworkLayer
+
+from yowsup.common import YowConstants
+from yowsup.layers import YowLayerEvent
+from yowsup.stacks import YowStack, YowStackBuilder
+from yowsup import env
+
+import sys, argparse, yowsup, logging
+
+from yowsup.layers.interface                           import YowInterfaceLayer, ProtocolEntityCallback
+from yowsup.layers.protocol_messages.protocolentities  import TextMessageProtocolEntity
+from yowsup.layers.protocol_receipts.protocolentities  import OutgoingReceiptProtocolEntity
+from yowsup.layers.protocol_acks.protocolentities      import OutgoingAckProtocolEntity
+
 
 
 class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
@@ -40,6 +56,23 @@ class WhatsAppTransport(Transport):
         return self.publish_ack(message['message_id'], 
             'remote-message-id')
             
+class Client:
+    def __init__(self, credentials):
+        self.CREDENTIALS = credentials
+    
+    def client_start(self):
+	
+        self.stack = YowStackBuilder.getDefaultStack(layer=EchoLayer, 
+            media=False)
+        self.stack.setCredentials(self.CREDENTIALS)
+        self.network_layer = self.stack.getLayer(0)
+        
+        self.stack.broadcastEvent(YowLayerEvent(
+            YowNetworkLayer.EVENT_STATE_CONNECT))  
+            
+        self.stack.loop(discrete=0, timeout=1)
+
+            
 class EchoLayer(YowInterfaceLayer):
 
     @ProtocolEntityCallback("message")
@@ -63,4 +96,5 @@ class EchoLayer(YowInterfaceLayer):
         ack = OutgoingAckProtocolEntity(entity.getId(), "receipt", 
             "delivery", entity.getFrom())
         self.toLower(ack)
+        
 
