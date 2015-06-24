@@ -14,6 +14,7 @@ setup(
     install_requires=[
         'vumi',
         'Twisted>=13.1.0',
+        'yowsup2',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
