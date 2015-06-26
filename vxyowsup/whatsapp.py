@@ -30,7 +30,6 @@ class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
 
 
 class WhatsAppClientDone(Exception):
-
     """ Signal that the Yowsup client is done. """
 
 
