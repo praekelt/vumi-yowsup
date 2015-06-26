@@ -8,15 +8,8 @@ from vumi import log
 
 from yowsup.layers.network import YowNetworkLayer
 
-from yowsup.common import YowConstants
 from yowsup.layers import YowLayerEvent
-from yowsup.stacks import YowStack, YowStackBuilder
-from yowsup import env
-
-import sys
-import argparse
-import yowsup
-import logging
+from yowsup.stacks import YowStackBuilder
 
 from yowsup.layers.interface import YowInterfaceLayer, ProtocolEntityCallback
 from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
@@ -37,6 +30,7 @@ class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
 
 
 class WhatsAppClientDone(Exception):
+
     """ Signal that the Yowsup client is done. """
 
 
@@ -87,13 +81,13 @@ class StackClient(object):
 
     def __init__(self, credentials):
         self.CREDENTIALS = credentials
-
-    def client_start(self):
         self.stack = YowStackBuilder.getDefaultStack(
             layer=EchoLayer, media=False)
         self.stack.setCredentials(self.CREDENTIALS)
         self.network_layer = self.stack.getLayer(0)
         self.echo_layer = self.stack.getLayer(-1)
+
+    def client_start(self):
 
         self.stack.broadcastEvent(YowLayerEvent(
             YowNetworkLayer.EVENT_STATE_CONNECT))
@@ -117,6 +111,7 @@ class StackClient(object):
     def send_to_stack(self, text, to_address):
         def send():
             self.echo_layer.send_to_human(text, to_address)
+            print('in stack_client', text, to_address)
         self.stack.execDetached(send)
 
 
@@ -125,7 +120,7 @@ class EchoLayer(YowInterfaceLayer):
     def send_to_human(self, text, to_address):
         message = TextMessageProtocolEntity(text, to=to_address)
         self.toLower(message)
-        print(text, to_address)
+        # print('in echo_layer', text, to_address)
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
