@@ -37,7 +37,6 @@ class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
 
 
 class WhatsAppClientDone(Exception):
-
     """ Signal that the Yowsup client is done. """
 
 
@@ -115,18 +114,18 @@ class StackClient(object):
         self.stack.execDetached(_stop)
         self.stack.execDetached(_kill)
 
-    def send_to_stack(self, text, toAddress):
-        # encapsulate text and address?
-        # rather have it interact with stack only?
-        self.stack.execDetached(self.echo_layer.send, text, toAddress)
+    def send_to_stack(self, text, to_address):
+        def send():
+            self.echo_layer.send_to_human(text, to_address)
+        self.stack.execDetached(send)
 
 
 class EchoLayer(YowInterfaceLayer):
 
-    def send_to_human(self, text, toAddress):
-        message = TextMessageProtocolEntity(text, to=toAddress)
+    def send_to_human(self, text, to_address):
+        message = TextMessageProtocolEntity(text, to=to_address)
         self.toLower(message)
-        print(text)
+        print(text, to_address)
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
@@ -138,7 +137,7 @@ class EchoLayer(YowInterfaceLayer):
         self.toLower(receipt)
 
         self.send_to_human(text=messageProtocolEntity.getBody(),
-                           toAddress=messageProtocolEntity.getFrom())
+                           to_address=messageProtocolEntity.getFrom())
 
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
