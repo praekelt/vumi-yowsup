@@ -20,7 +20,7 @@ from yowsup.layers.protocol_acks.protocolentities import OutgoingAckProtocolEnti
 
 
 def whatsapp_to_msisdn(whatsapp_addr):
-    return whatsapp_addr[0:-len('@s.whatsapp.net'):]
+    return whatsapp_addr[0:-len('@s.whatsapp.net')]
 
 
 class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
