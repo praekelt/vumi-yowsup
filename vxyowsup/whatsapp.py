@@ -1,10 +1,12 @@
 # -*- test-case-name: vumi.transports.whatsapp.tests.test_whatsapp -*-
 from twisted.internet import defer
+from twisted.internet import reactor
 from twisted.internet.threads import deferToThread
 
 from vumi.transports.base import Transport
 from vumi.config import ConfigText
 from vumi import log
+from vumi.message import TransportUserMessage
 
 from yowsup.layers.network import YowNetworkLayer
 
@@ -15,6 +17,10 @@ from yowsup.layers.interface import YowInterfaceLayer, ProtocolEntityCallback
 from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
 from yowsup.layers.protocol_receipts.protocolentities import OutgoingReceiptProtocolEntity
 from yowsup.layers.protocol_acks.protocolentities import OutgoingAckProtocolEntity
+
+
+def whatsapp_to_msisdn(whatsapp_addr):
+    return whatsapp_addr[0:-len('@s.whatsapp.net')]
 
 
 class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
@@ -43,7 +49,7 @@ class WhatsAppTransport(Transport):
         log.info('Transport starting with: %s' % (config,))
         CREDENTIALS = (config.phone, config.password)
 
-        stack_client = self.stack_client = StackClient(CREDENTIALS)
+        stack_client = self.stack_client = StackClient(CREDENTIALS, self)
 
         self.client_d = deferToThread(stack_client.client_start)
         self.client_d.addErrback(self.catch_exit)
@@ -78,13 +84,16 @@ class WhatsAppTransport(Transport):
 
 class StackClient(object):
 
-    def __init__(self, credentials):
+    def __init__(self, credentials, transport):
         self.CREDENTIALS = credentials
+        self.transport = transport
+
         self.stack = YowStackBuilder.getDefaultStack(
-            layer=EchoLayer, media=False)
+            layer=WhatsAppInterface(transport), media=False)
         self.stack.setCredentials(self.CREDENTIALS)
+
         self.network_layer = self.stack.getLayer(0)
-        self.echo_layer = self.stack.getLayer(-1)
+        self.whatsapp_interface = self.stack.getLayer(-1)
 
     def client_start(self):
 
@@ -109,29 +118,37 @@ class StackClient(object):
 
     def send_to_stack(self, text, to_address):
         def send():
-            self.echo_layer.send_to_human(text, to_address)
-            print('in stack_client', text, to_address)
+            self.whatsapp_interface.send_to_human(text, to_address)
         self.stack.execDetached(send)
 
 
-class EchoLayer(YowInterfaceLayer):
+class WhatsAppInterface(YowInterfaceLayer):
+
+    def __init__(self, transport):
+        super(WhatsAppInterface, self).__init__()
+        self.transport = transport
 
     def send_to_human(self, text, to_address):
         message = TextMessageProtocolEntity(text, to=to_address)
         self.toLower(message)
-        # print('in echo_layer', text, to_address)
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
+        from_address = messageProtocolEntity.getFrom()
+        body = messageProtocolEntity.getBody()
+        to_address = messageProtocolEntity.getTo()
+
         receipt = OutgoingReceiptProtocolEntity(
             messageProtocolEntity.getId(),
-            messageProtocolEntity.getFrom(), 'read',
+            from_address, 'read',
             messageProtocolEntity.getParticipant())
 
         self.toLower(receipt)
 
-        self.send_to_human(text=messageProtocolEntity.getBody(),
-                           to_address=messageProtocolEntity.getFrom())
+        reactor.callFromThread(self.transport.publish_message,
+                               from_addr=whatsapp_to_msisdn(from_address), content=body, to_addr=to_address,
+                               transport_type=self.transport.transport_type,
+                               to_addr_type=TransportUserMessage.AT_MSISDN)
 
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
