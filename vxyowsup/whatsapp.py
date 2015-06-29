@@ -6,6 +6,7 @@ from twisted.internet.threads import deferToThread
 from vumi.transports.base import Transport
 from vumi.config import ConfigText
 from vumi import log
+from vumi.message import TransportUserMessage
 
 from yowsup.layers.network import YowNetworkLayer
 
@@ -64,9 +65,9 @@ class WhatsAppTransport(Transport):
             return self.publish_nack(message['message_id'], 'failed')
             return self.publish_ack(
                 message['message_id'], 'remote-message-id')
-        # assumes message['to_addr'] will be the phone number + '@s.whatsapp.net'
+        # assumes message['to_addr'] will be the phone number
         self.stack_client.send_to_stack(
-            message['content'], message['to_addr'])
+            message['content'], message['to_addr'] + '@s.whatsapp.net')
 
     def catch_exit(self, f):
         f.trap(WhatsAppClientDone)
@@ -141,8 +142,9 @@ class WhatsAppInterface(YowInterfaceLayer):
         self.toLower(receipt)
 
         reactor.callFromThread(self.transport.publish_message,
-                               from_addr=from_address, content=body, to_addr=to_address,
-                               transport_type=self.transport.transport_type)
+                               from_addr=from_address[0:-15:1], content=body, to_addr=to_address,
+                               transport_type=self.transport.transport_type,
+                               to_addr_type=TransportUserMessage.AT_MSISDN)
 
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
