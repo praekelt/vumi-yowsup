@@ -19,6 +19,10 @@ from yowsup.layers.protocol_receipts.protocolentities import OutgoingReceiptProt
 from yowsup.layers.protocol_acks.protocolentities import OutgoingAckProtocolEntity
 
 
+def whatsapp_to_msisdn(whatsapp_addr):
+    return whatsapp_addr[0:-len('@s.whatsapp.net'):]
+
+
 class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
     cc = ConfigText(
         'Country code of host phone number',
@@ -142,7 +146,7 @@ class WhatsAppInterface(YowInterfaceLayer):
         self.toLower(receipt)
 
         reactor.callFromThread(self.transport.publish_message,
-                               from_addr=from_address[0:-15:1], content=body, to_addr=to_address,
+                               from_addr=whatsapp_to_msisdn(from_address), content=body, to_addr=to_address,
                                transport_type=self.transport.transport_type,
                                to_addr_type=TransportUserMessage.AT_MSISDN)
 
