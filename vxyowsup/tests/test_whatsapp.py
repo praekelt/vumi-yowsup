@@ -1,3 +1,5 @@
+import base64
+
 from twisted.internet.defer import inlineCallbacks
 
 from vumi.tests.utils import LogCatcher
@@ -7,49 +9,39 @@ from vumi.errors import ConfigError
 
 from vumi.transports.tests.helpers import TransportHelper
 
-from vxyowsup import WhatsAppTransport, WhatsAppInterface
-from yowsup.stacks import YowStack, YowStackBuilder
+from vxyowsup.whatsapp import WhatsAppTransport, StackClient
+from yowsup.stacks import YowStackBuilder
 from yowsup.layers.logger import YowLoggerLayer
-from yowsup.layers.__init__ import YowLayer
-from yowsup.layers import YowParallelLayer
-from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
+from yowsup.layers import YowLayer
+from yowsup.layers.protocol_messages.protocolentities import (
+    TextMessageProtocolEntity)
+
+
+class DummyStackBuilder(YowStackBuilder):
+    @staticmethod
+    def getCoreLayers():
+        return (
+            YowLoggerLayer,
+            TestingLayer,
+        )[::-1]
 
 
 class TestWhatsAppTransport(VumiTestCase):
 
+    @inlineCallbacks
     def setUp(self):
+        self.patch(StackClient, 'STACK_BUILDER', DummyStackBuilder)
         self.tx_helper = self.add_helper(TransportHelper(WhatsAppTransport))
         self.config = {
             'cc': '27',
             'phone': '27000000000',
-            'password': 'xxxxxxxxxxxxxxxxx=',
+            'password': base64.b64encode("xxx"),
         }
 
         self.transport = yield self.tx_helper.get_transport(self.config)
 
-        # true core layers:
-        # (
-        #     YowLoggerLayer,
-        #     YowCoderLayer,
-        #     YowCryptLayer,
-        #     YowStanzaRegulator,
-        #     YowNetworkLayer
-        # )[::-1]
-
-        # YowCoderLayer decodes bytearrays into instances of ProtocolTreeNode
-        # falsify this layer and all those below it into TestingLayer
-
-        new_core_layers = (YowLoggerLayer, TestingLayer)[::-1]
-
-        new_layers = new_core_layers
-        + YowParallelLayer(YowStackBuilder.getProtocolLayers(),)
-        + (WhatsAppInterface,)
-
-        new_stack = YowStack(new_layers, reversed=False)
-
-        self.stack.setCredentials(self.transport.stack_client.CREDENTIALS)
-        self.patch(
-            self.transport.stack_client, self.transport.stack_client.stack, new_stack)
+    def test_nothing(self):
+        pass
 
 
 class TestingLayer(YowLayer):
