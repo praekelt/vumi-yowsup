@@ -8,6 +8,9 @@ from vumi.errors import ConfigError
 from vumi.transports.tests.helpers import TransportHelper
 
 from vxyowsup import WhatsAppTransport
+from yowsup.stacks import YowStack
+from yowsup.layers.logger import YowLoggerLayer
+from yowsup.layers.__init__ import YowLayer
 
 
 class TestWhatsAppTransport(VumiTestCase):
@@ -21,3 +24,29 @@ class TestWhatsAppTransport(VumiTestCase):
         }
 
         self.transport = yield self.tx_helper.get_transport(self.config)
+
+        # true core layers:
+        # (
+        #     YowLoggerLayer,
+        #     YowCoderLayer,
+        #     YowCryptLayer,
+        #     YowStanzaRegulator,
+        #     YowNetworkLayer
+        # )[::-1]
+
+        # YowCoderLayer decodes bytearrays into instances of ProtocolTreeNode
+        # falsify this layer and all those below it into TestingLayer
+
+        new_stack = YowStack((
+            YowLoggerLayer,
+            TestingLayer
+        )[::-1])
+        self.stack.setCredentials(self.transport.stack_client.CREDENTIALS)
+        self.patch(self.transport.stack_client, self.transport.stack_client.stack, new_stack)
+
+#    def test_handle_outbound(self):
+#    	message = self.tx_helper.make_outbound('blep', from_addr='27xxxxxxxxx', to_addr='27xxxxxxxxxxx')
+
+
+class TestingLayer(YowLayer):
+    pass
