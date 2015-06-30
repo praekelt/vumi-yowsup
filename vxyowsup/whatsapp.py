@@ -84,11 +84,13 @@ class WhatsAppTransport(Transport):
 
 class StackClient(object):
 
+    STACK_BUILDER = YowStackBuilder
+
     def __init__(self, credentials, transport):
         self.CREDENTIALS = credentials
         self.transport = transport
 
-        self.stack = YowStackBuilder.getDefaultStack(
+        self.stack = self.STACK_BUILDER.getDefaultStack(
             layer=WhatsAppInterface(transport), media=False)
         self.stack.setCredentials(self.CREDENTIALS)
 
