@@ -40,9 +40,9 @@ class TestWhatsAppTransport(VumiTestCase):
 
         new_core_layers = (YowLoggerLayer, TestingLayer)[::-1]
 
-        new_layers = new_core_layers + \
-            YowParallelLayer(
-                YowStackBuilder.getProtocolLayers(),) + (WhatsAppInterface,)
+        new_layers = new_core_layers
+        + YowParallelLayer(YowStackBuilder.getProtocolLayers(),)
+        + (WhatsAppInterface,)
 
         new_stack = YowStack(new_layers, reversed=False)
 
@@ -50,9 +50,18 @@ class TestWhatsAppTransport(VumiTestCase):
         self.patch(
             self.transport.stack_client, self.transport.stack_client.stack, new_stack)
 
-#    def test_handle_outbound(self):
-#    	message = self.tx_helper.make_outbound('blep', from_addr='27xxxxxxxxx', to_addr='27xxxxxxxxxxx')
-
 
 class TestingLayer(YowLayer):
-    pass
+
+    def onEvent(self, event):
+        print event
+
+    def receive(self):
+        # receive from lower (no lower in this layer)
+        # send to upper
+        pass
+
+    def send(self):
+        # receive from upper
+        # send to lower (no lower in this layer)
+        pass
