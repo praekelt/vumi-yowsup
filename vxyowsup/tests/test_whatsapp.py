@@ -12,6 +12,7 @@ from yowsup.stacks import YowStack, YowStackBuilder
 from yowsup.layers.logger import YowLoggerLayer
 from yowsup.layers.__init__ import YowLayer
 from yowsup.layers import YowParallelLayer
+from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
 
 
 class TestWhatsAppTransport(VumiTestCase):
@@ -56,12 +57,21 @@ class TestingLayer(YowLayer):
     def onEvent(self, event):
         print event
 
-    def receive(self):
+    def receive(self, data):
+        # data would've been decrypted bytes,
+        # but in the testing layer they're yowsup.structs.protocoltreenode.ProtocolTreeNode
+        # for convenience
         # receive from lower (no lower in this layer)
         # send to upper
-        pass
+        self.toUpper(data)
 
-    def send(self):
+    def send(self, data):
+        # data is yowsup.structs.protocoltreenode.ProtocolTreeNode
         # receive from upper
         # send to lower (no lower in this layer)
-        pass
+        print(data)
+
+    def send_to_transport(self, text, to_address):
+        # method to be used in testing
+        message = TextMessageProtocolEntity(text, to=to_address)
+        self.receive(message.toProtocolTreeNode())
