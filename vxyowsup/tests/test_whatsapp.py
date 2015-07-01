@@ -20,10 +20,7 @@ from yowsup.layers.protocol_messages.protocolentities import (
 
 @staticmethod
 def getDummyCoreLayers():
-    return (
-        YowLoggerLayer,
-        TestingLayer,
-    )[::-1]
+    return (TestingLayer, YowLoggerLayer,)
 
 
 def TUMessage_to_PTNode(message):
@@ -49,6 +46,7 @@ class TestWhatsAppTransport(VumiTestCase):
         self.testing_layer = self.transport.stack_client.network_layer
 
     def assert_nodes_equal(self, node1, node2):
+        # TODO: test id explicitly
         node2["id"] = node1["id"]
         self.assertEqual(node1.toString(), node2.toString())
 
@@ -81,7 +79,6 @@ class TestingLayer(YowLayer):
         # data is yowsup.structs.protocoltreenode.ProtocolTreeNode
         # receive from upper
         # send to lower (no lower in this layer)
-#        print(data)
         reactor.callFromThread(self.data_received.put, data)
 
     def send_to_transport(self, text, to_address):

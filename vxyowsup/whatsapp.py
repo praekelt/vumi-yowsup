@@ -67,6 +67,7 @@ class WhatsAppTransport(Transport):
         log.info('Sending %r' % (message.to_json(),))
         self.stack_client.send_to_stack(
             message['content'], message['to_addr'] + '@s.whatsapp.net')
+        # TODO: set the  remote-message-id  to something more useful
         return self.publish_ack(
             message['message_id'], 'remote-message-id')
 
