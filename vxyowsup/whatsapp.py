@@ -65,13 +65,10 @@ class WhatsAppTransport(Transport):
     def handle_outbound_message(self, message):
         # message is a vumi.message.TransportUserMessage
         log.info('Sending %r' % (message.to_json(),))
-        if message['content'] == 'fail!':
-            return self.publish_nack(message['message_id'], 'failed')
-            return self.publish_ack(
-                message['message_id'], 'remote-message-id')
-        # assumes message['to_addr'] will be the phone number
         self.stack_client.send_to_stack(
             message['content'], message['to_addr'] + '@s.whatsapp.net')
+        return self.publish_ack(
+            message['message_id'], 'remote-message-id')
 
     def catch_exit(self, f):
         f.trap(WhatsAppClientDone)
