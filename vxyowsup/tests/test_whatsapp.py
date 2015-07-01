@@ -26,8 +26,12 @@ def getDummyCoreLayers():
 def TUMessage_to_PTNode(message):
     # message is TransportUserMessage
     # returns ProtocolTreeNode
-    return TextMessageProtocolEntity(message['content'], to=message['to_addr']
-                                     + '@s.whatsapp.net').toProtocolTreeNode()
+    if message['to_addr']:
+        return TextMessageProtocolEntity(message['content'], to=message['to_addr']
+                                         + '@s.whatsapp.net').toProtocolTreeNode()
+    elif message['from_addr']:
+        return TextMessageProtocolEntity(message['content'], _from=message['from_addr']
+                                         + '@s.whatsapp.net').toProtocolTreeNode()
 
 
 class TestWhatsAppTransport(VumiTestCase):
@@ -56,6 +60,12 @@ class TestWhatsAppTransport(VumiTestCase):
         node_received = yield self.testing_layer.data_received.get()
         self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
 
+    @inlineCallbacks
+    def test_publish(self):
+        message_sent = yield self.testing_layer.send_to_transport(text='Hi Vumi! :)', from_address='meeeeeeeee@s.whatsapp.net')
+        [message_received] = yield self.tx_helper.wait_for_dispatched_inbound(1)
+        self.assert_nodes_equal(message_sent, TUMessage_to_PTNode(message_received))
+
 
 class TestingLayer(YowLayer):
 
@@ -81,7 +91,8 @@ class TestingLayer(YowLayer):
         # send to lower (no lower in this layer)
         reactor.callFromThread(self.data_received.put, data)
 
-    def send_to_transport(self, text, to_address):
+    def send_to_transport(self, text, from_address):
         # method to be used in testing
-        message = TextMessageProtocolEntity(text, to=to_address)
-        self.receive(message.toProtocolTreeNode())
+        message = TextMessageProtocolEntity(text, _from=from_address).toProtocolTreeNode()
+        self.receive(message)
+        return message
