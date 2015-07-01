@@ -20,7 +20,7 @@ from yowsup.layers.protocol_messages.protocolentities import (
 
 @staticmethod
 def getDummyCoreLayers():
-    return (TestingLayer, YowLoggerLayer,)
+    return (TestingLayer, YowLoggerLayer)
 
 
 def TUMessage_to_PTNode(message):
