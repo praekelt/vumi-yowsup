@@ -95,21 +95,25 @@ class TestingLayer(YowLayer):
         print(event.getName())
 
     def receive(self, data):
-        # data would've been decrypted bytes,
-        # but in the testing layer they're yowsup.structs.protocoltreenode.ProtocolTreeNode
-        # for convenience
-        # receive from lower (no lower in this layer)
-        # send to upper
+        '''
+        data would've been decrypted bytes,
+        but in the testing layer they're yowsup.structs.protocoltreenode.ProtocolTreeNode
+        for convenience
+        receive from lower (no lower in this layer)
+        send to upper
+        '''
         self.toUpper(data)
 
     def send(self, data):
-        # data is yowsup.structs.protocoltreenode.ProtocolTreeNode
-        # receive from upper
-        # send to lower (no lower in this layer)
+        '''
+        data is yowsup.structs.protocoltreenode.ProtocolTreeNode
+        receive from upper
+        send to lower (no lower in this layer)
+        '''
         reactor.callFromThread(self.data_received.put, data)
 
     def send_to_transport(self, text, from_address):
-        # method to be used in testing
+        '''method to be used in testing'''
         message = TextMessageProtocolEntity(text, _from=from_address).toProtocolTreeNode()
         self.receive(message)
         return message
