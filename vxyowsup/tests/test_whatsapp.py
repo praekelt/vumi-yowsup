@@ -7,7 +7,7 @@ from vumi.tests.utils import LogCatcher
 from vumi.tests.helpers import VumiTestCase
 from vumi.config import Config
 from vumi.errors import ConfigError
-
+from vumi.message import TransportUserMessage
 from vumi.transports.tests.helpers import TransportHelper
 
 from vxyowsup.whatsapp import WhatsAppTransport
@@ -24,14 +24,23 @@ def getDummyCoreLayers():
 
 
 def TUMessage_to_PTNode(message):
-    # message is TransportUserMessage
-    # returns ProtocolTreeNode
-    if message['to_addr']:
-        return TextMessageProtocolEntity(message['content'], to=message['to_addr']
-                                         + '@s.whatsapp.net').toProtocolTreeNode()
-    elif message['from_addr']:
-        return TextMessageProtocolEntity(message['content'], _from=message['from_addr']
-                                         + '@s.whatsapp.net').toProtocolTreeNode()
+    '''
+    message is TransportUserMessage
+    returns ProtocolTreeNode
+    '''
+    return TextMessageProtocolEntity(message['content'], to=message['to_addr']
+                                     + '@s.whatsapp.net').toProtocolTreeNode()
+
+
+def PTNode_to_TUMessage(node):
+    '''
+    node is ProtocolTreeNode
+    returns TransportUserMessage
+    '''
+    message = TextMessageProtocolEntity.fromProtocolTreeNode(node)
+    return TransportUserMessage(to_addr=None, from_addr=message.getFrom(False),
+                                content=message.getBody(), transport_name='whatsapp',
+                                transport_type='whatsapp')
 
 
 class TestWhatsAppTransport(VumiTestCase):
@@ -54,6 +63,14 @@ class TestWhatsAppTransport(VumiTestCase):
         node2["id"] = node1["id"]
         self.assertEqual(node1.toString(), node2.toString())
 
+    def assert_messages_equal(self, message1, message2):
+        '''
+        assert two instances of TransportUserMessage are equal
+        '''
+        self.assertEqual(message1['content'], message2['content'])
+        self.assertEqual(message1['to_addr'], message2['to_addr'])
+        self.assertEqual(message1['from_addr'], message2['from_addr'])
+
     @inlineCallbacks
     def test_outbound(self):
         message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr='double fail!')
@@ -64,7 +81,7 @@ class TestWhatsAppTransport(VumiTestCase):
     def test_publish(self):
         message_sent = yield self.testing_layer.send_to_transport(text='Hi Vumi! :)', from_address='meeeeeeeee@s.whatsapp.net')
         [message_received] = yield self.tx_helper.wait_for_dispatched_inbound(1)
-        self.assert_nodes_equal(message_sent, TUMessage_to_PTNode(message_received))
+        self.assert_messages_equal(PTNode_to_TUMessage(message_sent), message_received)
 
 
 class TestingLayer(YowLayer):
