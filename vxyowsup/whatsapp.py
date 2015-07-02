@@ -93,8 +93,7 @@ class StackClient(object):
 
     def client_start(self):
 
-        self.stack.broadcastEvent(YowLayerEvent(
-            YowNetworkLayer.EVENT_STATE_CONNECT))
+        self.whatsapp_interface.connect()
 
         self.stack.loop(discrete=0, count=1, timeout=1)
 
@@ -103,8 +102,7 @@ class StackClient(object):
 
         def _stop():
             print "Sending disconnect ..."
-            self.stack.broadcastEvent(YowLayerEvent(
-                YowNetworkLayer.EVENT_STATE_DISCONNECT))
+            self.whatsapp_interface.disconnect()
 
         def _kill():
             raise WhatsAppClientDone("We are exiting NOW!")
@@ -139,7 +137,6 @@ class WhatsAppInterface(YowInterfaceLayer):
             messageProtocolEntity.getParticipant())
 
         self.toLower(receipt)
-
         reactor.callFromThread(self.transport.publish_message,
                                from_addr=from_address, content=body, to_addr=None,
                                transport_type=self.transport.transport_type,
@@ -147,6 +144,18 @@ class WhatsAppInterface(YowInterfaceLayer):
 
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
+        '''receives confirmation of delivery to human'''
+        # shady
+        # getting too many receipts
+        print 'got receipt'
         ack = OutgoingAckProtocolEntity(
             entity.getId(), "receipt", "delivery", entity.getFrom())
         self.toLower(ack)
+
+    @ProtocolEntityCallback("ack")
+    def onAck(self, entity):
+        '''receives confirmation of delivery to server'''
+        print 'got ack'
+        reactor.callFromThread(self.transport.publish_ack,
+                               user_message_id=entity.getId(),
+                               sent_message_id=entity.getId())
