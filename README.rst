@@ -11,7 +11,7 @@ A WhatsApp transport for `Vumi`_ built on `Yowsup`_.
 .. |vxyowsup-ci| image:: https://travis-ci.org/praekelt/vumi-yowsup.png?branch=develop
     :alt: Travis CI build status
     :scale: 100%
-    :target: https://travis-ci.org/praekelt/vumi-yowsub
+    :target: https://travis-ci.org/praekelt/vumi-yowsup
 
 .. |vxyowsup-cover| image:: https://coveralls.io/repos/praekelt/vumi-yowsup/badge.png?branch=develop
     :alt: Coveralls coverage status
