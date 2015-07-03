@@ -132,11 +132,15 @@ class WhatsAppInterface(YowInterfaceLayer):
         self.transport.redis.setex(message.getId(), 60 * 60 * 24, message_id)
         # new whatsapp id, message.getId(), set
         self.toLower(message)
+        print "SEEEEEEEEEEEEEEEEEENDING TO HHHHHHHUUUUUUUUUUUUUUUUUMAN"
+        print message
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
         from_address = messageProtocolEntity.getFrom(False)
         body = messageProtocolEntity.getBody()
+
+        print('why are you getting a message here')
 
         receipt = OutgoingReceiptProtocolEntity(
             messageProtocolEntity.getId(),
@@ -160,12 +164,15 @@ class WhatsAppInterface(YowInterfaceLayer):
         self.toLower(ack)
 
     @ProtocolEntityCallback("ack")
+    @defer.inlineCallbacks
     def onAck(self, ack):
         '''receives confirmation of delivery to server'''
         print 'got ack'
+        print ack
         # sent_message_id: whatsapp id
         # user_message_id: vumi_id
         msg_id = ack.getId()
+        vumi_id = yield self.transport.redis.get(msg_id)
         reactor.callFromThread(self.transport.publish_ack,
-                               user_message_id=self.transport.redis.get(msg_id),
+                               user_message_id=vumi_id,
                                sent_message_id=msg_id)
