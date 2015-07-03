@@ -53,6 +53,7 @@ class TestWhatsAppTransport(VumiTestCase):
             'cc': '27',
             'phone': '27000000000',
             'password': base64.b64encode("xxx"),
+            'redis_manager': {'key_prefix': "vumi:whatsapp", 'db': 1},
         }
 
         self.transport = yield self.tx_helper.get_transport(self.config)
@@ -71,11 +72,18 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(message1['to_addr'], message2['to_addr'])
         self.assertEqual(message1['from_addr'], message2['from_addr'])
 
+    def assert_ack(self, ack, message):
+#        self.assertEqual(ack.payload['event_type'], 'ack')
+#        self.assertEqual(ack.payload['user_message_id'], message['message_id'])
+#        self.assertEqual(ack.payload['sent_message_id'], 'remote-message-id')
+
     @inlineCallbacks
     def test_outbound(self):
         message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr='double fail!')
         node_received = yield self.testing_layer.data_received.get()
         self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
+        [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
+        self.assert_ack(ack, message_sent)
 
     @inlineCallbacks
     def test_publish(self):
