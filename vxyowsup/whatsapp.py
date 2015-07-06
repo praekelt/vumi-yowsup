@@ -77,6 +77,13 @@ class WhatsAppTransport(Transport):
         vumi_id = yield self.redis.get(whatsapp_id)
         yield self.publish_ack(user_message_id=vumi_id, sent_message_id=whatsapp_id)
 
+    @defer.inlineCallbacks
+    def _send_delivery_report(self, whatsapp_id):
+        vumi_id = yield self.redis.get(whatsapp_id)
+        yield self.publish_delivery_report(user_message_id=vumi_id, delivery_status='delivered')
+        # safe to remove key from redis here?
+        # would be nice to remove to prevent sending delivery report for both delivered and 'read'
+
     def catch_exit(self, f):
         f.trap(WhatsAppClientDone)
         print "Yowsup client killed."
@@ -151,8 +158,8 @@ class WhatsAppInterface(YowInterfaceLayer):
         self.toLower(receipt)
 
         print "You have received a message, and thusly sent a receipt"
-        # print "You are now sending a reply"
-        # self.send_to_human('iiii', from_address + '@s.whatsapp.net', "this transport's gone rogue")
+        print "You are now sending a reply"
+        self.send_to_human('iiii', from_address + '@s.whatsapp.net', "this transport's gone rogue")
 
         reactor.callFromThread(self.transport.publish_message,
                                from_addr=from_address, content=body, to_addr=None,
@@ -165,8 +172,16 @@ class WhatsAppInterface(YowInterfaceLayer):
         # shady?
         print "The user you attempted to contact has received the message"
         print "You are sending an acknowledgement of their accomplishment"
+        print entity.getType()
         ack = OutgoingAckProtocolEntity(entity.getId(), "receipt", entity.getType(), entity.getFrom())
         self.toLower(ack)
+        # if receipt means that it got delivered to the whatsapp user then
+        # entity.getType() is None
+        # if receipt means that the user has opened the message then
+        # entity.getType() is 'read'
+        # when it is delivered and read simultaneously,
+        # only one receipt is sent and entity.getType() is 'read'
+        reactor.callFromThread(self.transport._send_delivery_report, entity.getId())
 
     @ProtocolEntityCallback("ack")
     def onAck(self, ack):
@@ -175,5 +190,4 @@ class WhatsAppInterface(YowInterfaceLayer):
         # user_message_id: vumi_id
         print "WhatsApp acknowledges your " + ack.getClass()
         if ack.getClass() == "message":
-            msg_id = ack.getId()
-            reactor.callFromThread(self.transport._send_ack, msg_id)
+            reactor.callFromThread(self.transport._send_ack, ack.getId())

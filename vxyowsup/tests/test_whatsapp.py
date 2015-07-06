@@ -59,16 +59,18 @@ class TestWhatsAppTransport(VumiTestCase):
         self.transport = yield self.tx_helper.get_transport(self.config)
         self.testing_layer = self.transport.stack_client.network_layer
 
+    def assert_id_format_correct(self, node):
+        uuid, _sep, count = node["id"].partition('-')
+        self.assertEqual(len(uuid), 10)
+        self.assertTrue(int(count) > 0)
+
     def assert_nodes_equal(self, node1, node2):
-        # there might be a better way to test the ids
-        id_1 = node1["id"]
-        id_2 = node2["id"]
-        cut_id = id_1.split('-')[0]
-        node1["id"] = cut_id
-        node2["id"] = cut_id
-        self.assertEqual(node1.toString(), node2.toString())
-        node1["id"] = id_1
-        node2["id"] = id_2
+        self.assert_id_format_correct(node1)
+        self.assert_id_format_correct(node2)
+        id_stub = node1["id"].split('-')[0]
+        xml1 = node1.toString().replace(node1["id"], id_stub)
+        xml2 = node2.toString().replace(node2["id"], id_stub)
+        self.assertEqual(xml1, xml2)
 
     def assert_messages_equal(self, message1, message2):
         '''
