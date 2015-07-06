@@ -148,8 +148,12 @@ class WhatsAppInterface(YowInterfaceLayer):
             messageProtocolEntity.getId(),
             from_address + '@s.whatsapp.net', 'read',
             messageProtocolEntity.getParticipant())
-
         self.toLower(receipt)
+
+        print "You have received a message, and thusly sent a receipt"
+        # print "You are now sending a reply"
+        # self.send_to_human('iiii', from_address + '@s.whatsapp.net', "this transport's gone rogue")
+
         reactor.callFromThread(self.transport.publish_message,
                                from_addr=from_address, content=body, to_addr=None,
                                transport_type=self.transport.transport_type,
@@ -158,10 +162,10 @@ class WhatsAppInterface(YowInterfaceLayer):
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
         '''receives confirmation of delivery to human'''
-        # shady
-        # not getting any receipts
-        ack = OutgoingAckProtocolEntity(
-            entity.getId(), "receipt", "delivery", entity.getFrom())
+        # shady?
+        print "The user you attempted to contact has received the message"
+        print "You are sending an acknowledgement of their accomplishment"
+        ack = OutgoingAckProtocolEntity(entity.getId(), "receipt", entity.getType(), entity.getFrom())
         self.toLower(ack)
 
     @ProtocolEntityCallback("ack")
@@ -169,5 +173,7 @@ class WhatsAppInterface(YowInterfaceLayer):
         '''receives confirmation of delivery to server'''
         # sent_message_id: whatsapp id
         # user_message_id: vumi_id
-        msg_id = ack.getId()
-        reactor.callFromThread(self.transport._send_ack, msg_id)
+        print "WhatsApp acknowledges your " + ack.getClass()
+        if ack.getClass() == "message":
+            msg_id = ack.getId()
+            reactor.callFromThread(self.transport._send_ack, msg_id)
