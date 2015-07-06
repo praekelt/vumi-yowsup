@@ -69,8 +69,9 @@ class WhatsAppTransport(Transport):
     def handle_outbound_message(self, message):
         # message is a vumi.message.TransportUserMessage
         log.info('Sending %r' % (message.to_json(),))
-        self.stack_client.send_to_stack(
-            message['content'], message['to_addr'], message['message_id'])
+        msg = TextMessageProtocolEntity(message['content'], to=message['to_addr'] + '@s.whatsapp.net')
+        self.redis.setex(msg.getId(), self.config.ack_timeout, message['message_id'])
+        self.stack_client.send_to_stack(msg)
 
     @defer.inlineCallbacks
     def _send_ack(self, whatsapp_id):
@@ -127,9 +128,9 @@ class StackClient(object):
         self.stack.execDetached(_stop)
         self.stack.execDetached(_kill)
 
-    def send_to_stack(self, text, to_address, message_id):
+    def send_to_stack(self, msg):
         def send():
-            self.whatsapp_interface.send_to_human(text, to_address + '@s.whatsapp.net', message_id)
+            self.whatsapp_interface.send_to_human(msg)
         self.stack.execDetached(send)
 
 
@@ -139,12 +140,8 @@ class WhatsAppInterface(YowInterfaceLayer):
         super(WhatsAppInterface, self).__init__()
         self.transport = transport
 
-    def send_to_human(self, text, to_address, message_id):
-        # message_id is vumi id
-        message = TextMessageProtocolEntity(text, to=to_address)
-        self.transport.redis.setex(message.getId(), self.transport.config.ack_timeout, message_id)
-        # new whatsapp id, message.getId(), set
-        self.toLower(message)
+    def send_to_human(self, msg):
+        self.toLower(msg)
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
@@ -159,7 +156,7 @@ class WhatsAppInterface(YowInterfaceLayer):
 
         print "You have received a message, and thusly sent a receipt"
         print "You are now sending a reply"
-        self.send_to_human('iiii', from_address + '@s.whatsapp.net', "this transport's gone rogue")
+        # self.send_to_human('iiii', from_address + '@s.whatsapp.net', "this transport's gone rogue")
 
         reactor.callFromThread(self.transport.publish_message,
                                from_addr=from_address, content=body, to_addr=None,
