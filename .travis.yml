@@ -5,6 +5,8 @@ python:
 env:
   # Test against the latest version of Twisted.
   - TWISTED_VERSION="Twisted"
+services:
+  - redis-server
 matrix:
   include:
     # Test against the oldest version of Twisted that we claim to support
