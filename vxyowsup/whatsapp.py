@@ -4,7 +4,7 @@ from twisted.internet import reactor
 from twisted.internet.threads import deferToThread
 
 from vumi.transports.base import Transport
-from vumi.config import ConfigText, ConfigDict
+from vumi.config import ConfigText, ConfigDict, ConfigInt
 from vumi import log
 from vumi.message import TransportUserMessage
 from vumi.persist.txredis_manager import TxRedisManager
@@ -29,6 +29,9 @@ class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
         static=True)
     redis_manager = ConfigDict(
         'How to connect to Redis', required=True, static=True)
+    ack_timeout = ConfigInt(
+        'Length of time (integer) redis will store message ids in seconds (timeout for receiving acks)',
+        default=60*60*24, static=True)
 
 
 class WhatsAppClientDone(Exception):
@@ -42,17 +45,18 @@ class WhatsAppTransport(Transport):
 
     @defer.inlineCallbacks
     def setup_transport(self):
-        config = self.get_static_config()
+        config = self.config = self.get_static_config()
         log.info('Transport starting with: %s' % (config,))
+
+        self.redis = yield TxRedisManager.from_config(config.redis_manager)
+        self.redis = self.redis.sub_manager(self.transport_name)
+
         CREDENTIALS = (config.phone, config.password)
 
         stack_client = self.stack_client = StackClient(CREDENTIALS, self)
         self.client_d = deferToThread(stack_client.client_start)
         self.client_d.addErrback(self.catch_exit)
         self.client_d.addErrback(self.print_error)
-
-        self.redis = yield TxRedisManager.from_config(config.redis_manager)
-        self.redis = self.redis.sub_manager(self.transport_name)
 
     @defer.inlineCallbacks
     def teardown_transport(self):
@@ -67,9 +71,11 @@ class WhatsAppTransport(Transport):
         log.info('Sending %r' % (message.to_json(),))
         self.stack_client.send_to_stack(
             message['content'], message['to_addr'], message['message_id'])
-        # TODO: set the  remote-message-id  to something more useful
-#        return self.publish_ack(
-#            message['message_id'], 'remote-message-id')
+
+    @defer.inlineCallbacks
+    def _send_ack(self, whatsapp_id):
+        vumi_id = yield self.redis.get(whatsapp_id)
+        yield self.publish_ack(user_message_id=vumi_id, sent_message_id=whatsapp_id)
 
     def catch_exit(self, f):
         f.trap(WhatsAppClientDone)
@@ -129,7 +135,7 @@ class WhatsAppInterface(YowInterfaceLayer):
     def send_to_human(self, text, to_address, message_id):
         # message_id is vumi id
         message = TextMessageProtocolEntity(text, to=to_address)
-        self.transport.redis.setex(message.getId(), 60 * 60 * 24, message_id)
+        self.transport.redis.setex(message.getId(), self.transport.config.ack_timeout, message_id)
         # new whatsapp id, message.getId(), set
         self.toLower(message)
 
@@ -153,19 +159,15 @@ class WhatsAppInterface(YowInterfaceLayer):
     def onReceipt(self, entity):
         '''receives confirmation of delivery to human'''
         # shady
-        # getting too many receipts
+        # not getting any receipts
         ack = OutgoingAckProtocolEntity(
             entity.getId(), "receipt", "delivery", entity.getFrom())
         self.toLower(ack)
 
     @ProtocolEntityCallback("ack")
-    @defer.inlineCallbacks
     def onAck(self, ack):
         '''receives confirmation of delivery to server'''
         # sent_message_id: whatsapp id
         # user_message_id: vumi_id
         msg_id = ack.getId()
-        vumi_id = yield self.transport.redis.get(msg_id)
-        reactor.callFromThread(self.transport.publish_ack,
-                               user_message_id=vumi_id,
-                               sent_message_id=msg_id)
+        reactor.callFromThread(self.transport._send_ack, msg_id)
