@@ -127,9 +127,6 @@ class TestingLayer(YowLayer):
         reactor.callFromThread(self.data_received.put, data)
         ack = AckProtocolEntity(_id=data['id'], _class='message')
         self.receive(ack.toProtocolTreeNode())
-        print("I promise I just tried to send an ack!")
-        print ack
-        print data
 
     def send_to_transport(self, text, from_address):
         '''method to be used in testing'''
