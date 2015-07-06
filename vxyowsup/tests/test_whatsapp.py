@@ -60,9 +60,15 @@ class TestWhatsAppTransport(VumiTestCase):
         self.testing_layer = self.transport.stack_client.network_layer
 
     def assert_nodes_equal(self, node1, node2):
-        # TODO: test id explicitly
-        node2["id"] = node1["id"]
+        # there might be a better way to test the ids
+        id_1 = node1["id"]
+        id_2 = node2["id"]
+        cut_id = id_1.split('-')[0]
+        node1["id"] = cut_id
+        node2["id"] = cut_id
         self.assertEqual(node1.toString(), node2.toString())
+        node1["id"] = id_1
+        node2["id"] = id_2
 
     def assert_messages_equal(self, message1, message2):
         '''
@@ -79,20 +85,17 @@ class TestWhatsAppTransport(VumiTestCase):
 
     @inlineCallbacks
     def test_outbound(self):
-        print("waiting for message")
         message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr='double fail!')
-        print("waiting to receive node")
         node_received = yield self.testing_layer.data_received.get()
-        print("waiting for ack")
         [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
         self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
         self.assert_ack(ack, message_sent, node_received['id'])
 
-#    @inlineCallbacks
-#    def test_publish(self):
-#        message_sent = yield self.testing_layer.send_to_transport(text='Hi Vumi! :)', from_address='meeeeeeeee@s.whatsapp.net')
-#        [message_received] = yield self.tx_helper.wait_for_dispatched_inbound(1)
-#        self.assert_messages_equal(PTNode_to_TUMessage(message_sent), message_received)
+    @inlineCallbacks
+    def test_publish(self):
+        message_sent = yield self.testing_layer.send_to_transport(text='Hi Vumi! :)', from_address='meeeeeeeee@s.whatsapp.net')
+        [message_received] = yield self.tx_helper.wait_for_dispatched_inbound(1)
+        self.assert_messages_equal(PTNode_to_TUMessage(message_sent), message_received)
 
 
 class TestingLayer(YowLayer):
