@@ -6,13 +6,17 @@ A WhatsApp transport for `Vumi`_ built on `Yowsup`_.
 .. _Vumi: http://github.com/praekelt/vumi
 .. _Yowsup: https://github.com/tgalal/yowsup
 
-|vxyowsup-ci|_ |vxyowsup-cover|_
+|vxyowsup-ci| |vxyowsup-cover|
 
-.. |vxyowsup-ci| image:: https://travis-ci.org/praekelt/vumi-yowsub.png?branch=develop
-.. _vxyowsup-ci: https://travis-ci.org/praekelt/vumi-yowsub
+.. |vxyowsup-ci| image:: https://travis-ci.org/praekelt/vumi-yowsup.png?branch=develop
+    :alt: Travis CI build status
+    :scale: 100%
+    :target: https://travis-ci.org/praekelt/vumi-yowsup
 
-.. |vxyowsub-cover| image:: https://coveralls.io/repos/praekelt/vumi-yowsub/badge.png?branch=develop
-.. _vxyowsub-cover: https://coveralls.io/r/praekelt/vumi-yowsub
+.. |vxyowsup-cover| image:: https://coveralls.io/repos/praekelt/vumi-yowsup/badge.png?branch=develop
+    :alt: Coveralls coverage status
+    :scale: 100%
+    :target: https://coveralls.io/r/praekelt/vumi-yowsup
 
 You can contact the Vumi development team in the following ways:
 
