@@ -4,13 +4,11 @@ from twisted.internet import reactor
 from twisted.internet.threads import deferToThread
 
 from vumi.transports.base import Transport
-from vumi.config import ConfigText
+from vumi.config import ConfigText, ConfigDict, ConfigInt
 from vumi import log
 from vumi.message import TransportUserMessage
+from vumi.persist.txredis_manager import TxRedisManager
 
-from yowsup.layers.network import YowNetworkLayer
-
-from yowsup.layers import YowLayerEvent
 from yowsup.stacks import YowStackBuilder
 
 from yowsup.layers.interface import YowInterfaceLayer, ProtocolEntityCallback
@@ -29,6 +27,11 @@ class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
     password = ConfigText(
         'Password received from WhatsApp on yowsup registration',
         static=True)
+    redis_manager = ConfigDict(
+        'How to connect to Redis', required=True, static=True)
+    ack_timeout = ConfigInt(
+        'Length of time (integer) redis will store message ids in seconds (timeout for receiving acks)',
+        default=60*60*24, static=True)
 
 
 class WhatsAppClientDone(Exception):
@@ -40,13 +43,17 @@ class WhatsAppTransport(Transport):
     CONFIG_CLASS = WhatsAppTransportConfig
     transport_type = 'whatsapp'
 
+    @defer.inlineCallbacks
     def setup_transport(self):
-        config = self.get_static_config()
+        config = self.config = self.get_static_config()
         log.info('Transport starting with: %s' % (config,))
+
+        self.redis = yield TxRedisManager.from_config(config.redis_manager)
+        self.redis = self.redis.sub_manager(self.transport_name)
+
         CREDENTIALS = (config.phone, config.password)
 
         stack_client = self.stack_client = StackClient(CREDENTIALS, self)
-
         self.client_d = deferToThread(stack_client.client_start)
         self.client_d.addErrback(self.catch_exit)
         self.client_d.addErrback(self.print_error)
@@ -56,16 +63,27 @@ class WhatsAppTransport(Transport):
         print "Stopping client ..."
         self.stack_client.client_stop()
         yield self.client_d
+        yield self.redis._close()
         print "Loop done."
 
     def handle_outbound_message(self, message):
         # message is a vumi.message.TransportUserMessage
         log.info('Sending %r' % (message.to_json(),))
-        self.stack_client.send_to_stack(
-            message['content'], message['to_addr'] + '@s.whatsapp.net')
-        # TODO: set the  remote-message-id  to something more useful
-        return self.publish_ack(
-            message['message_id'], 'remote-message-id')
+        msg = TextMessageProtocolEntity(message['content'], to=message['to_addr'] + '@s.whatsapp.net')
+        self.redis.setex(msg.getId(), self.config.ack_timeout, message['message_id'])
+        self.stack_client.send_to_stack(msg)
+
+    @defer.inlineCallbacks
+    def _send_ack(self, whatsapp_id):
+        vumi_id = yield self.redis.get(whatsapp_id)
+        yield self.publish_ack(user_message_id=vumi_id, sent_message_id=whatsapp_id)
+
+    @defer.inlineCallbacks
+    def _send_delivery_report(self, whatsapp_id):
+        vumi_id = yield self.redis.get(whatsapp_id)
+        yield self.publish_delivery_report(user_message_id=vumi_id, delivery_status='delivered')
+        # safe to remove key from redis here?
+        # would be nice to remove to prevent sending delivery report for both delivered and 'read'
 
     def catch_exit(self, f):
         f.trap(WhatsAppClientDone)
@@ -93,8 +111,7 @@ class StackClient(object):
 
     def client_start(self):
 
-        self.stack.broadcastEvent(YowLayerEvent(
-            YowNetworkLayer.EVENT_STATE_CONNECT))
+        self.whatsapp_interface.connect()
 
         self.stack.loop(discrete=0, count=1, timeout=1)
 
@@ -103,8 +120,7 @@ class StackClient(object):
 
         def _stop():
             print "Sending disconnect ..."
-            self.stack.broadcastEvent(YowLayerEvent(
-                YowNetworkLayer.EVENT_STATE_DISCONNECT))
+            self.whatsapp_interface.disconnect()
 
         def _kill():
             raise WhatsAppClientDone("We are exiting NOW!")
@@ -112,9 +128,9 @@ class StackClient(object):
         self.stack.execDetached(_stop)
         self.stack.execDetached(_kill)
 
-    def send_to_stack(self, text, to_address):
+    def send_to_stack(self, msg):
         def send():
-            self.whatsapp_interface.send_to_human(text, to_address)
+            self.whatsapp_interface.send_to_human(msg)
         self.stack.execDetached(send)
 
 
@@ -124,9 +140,8 @@ class WhatsAppInterface(YowInterfaceLayer):
         super(WhatsAppInterface, self).__init__()
         self.transport = transport
 
-    def send_to_human(self, text, to_address):
-        message = TextMessageProtocolEntity(text, to=to_address)
-        self.toLower(message)
+    def send_to_human(self, msg):
+        self.toLower(msg)
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
@@ -137,8 +152,11 @@ class WhatsAppInterface(YowInterfaceLayer):
             messageProtocolEntity.getId(),
             from_address + '@s.whatsapp.net', 'read',
             messageProtocolEntity.getParticipant())
-
         self.toLower(receipt)
+
+        print "You have received a message, and thusly sent a receipt"
+        print "You are now sending a reply"
+        # self.send_to_human('iiii', from_address + '@s.whatsapp.net', "this transport's gone rogue")
 
         reactor.callFromThread(self.transport.publish_message,
                                from_addr=from_address, content=body, to_addr=None,
@@ -147,6 +165,26 @@ class WhatsAppInterface(YowInterfaceLayer):
 
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
-        ack = OutgoingAckProtocolEntity(
-            entity.getId(), "receipt", "delivery", entity.getFrom())
+        '''receives confirmation of delivery to human'''
+        # shady?
+        print "The user you attempted to contact has received the message"
+        print "You are sending an acknowledgement of their accomplishment"
+        print entity.getType()
+        ack = OutgoingAckProtocolEntity(entity.getId(), "receipt", entity.getType(), entity.getFrom())
         self.toLower(ack)
+        # if receipt means that it got delivered to the whatsapp user then
+        # entity.getType() is None
+        # if receipt means that the user has opened the message then
+        # entity.getType() is 'read'
+        # when it is delivered and read simultaneously,
+        # only one receipt is sent and entity.getType() is 'read'
+        reactor.callFromThread(self.transport._send_delivery_report, entity.getId())
+
+    @ProtocolEntityCallback("ack")
+    def onAck(self, ack):
+        '''receives confirmation of delivery to server'''
+        # sent_message_id: whatsapp id
+        # user_message_id: vumi_id
+        print "WhatsApp acknowledges your " + ack.getClass()
+        if ack.getClass() == "message":
+            reactor.callFromThread(self.transport._send_ack, ack.getId())

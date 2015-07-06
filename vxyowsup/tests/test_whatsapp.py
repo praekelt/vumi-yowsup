@@ -14,8 +14,8 @@ from vxyowsup.whatsapp import WhatsAppTransport
 from yowsup.stacks import YowStackBuilder
 from yowsup.layers.logger import YowLoggerLayer
 from yowsup.layers import YowLayer
-from yowsup.layers.protocol_messages.protocolentities import (
-    TextMessageProtocolEntity)
+from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
+from yowsup.layers.protocol_acks.protocolentities import AckProtocolEntity
 
 
 @staticmethod
@@ -53,15 +53,24 @@ class TestWhatsAppTransport(VumiTestCase):
             'cc': '27',
             'phone': '27000000000',
             'password': base64.b64encode("xxx"),
+            #'redis_manager': {'key_prefix': "vumi:whatsapp", 'db': 1},
         }
 
         self.transport = yield self.tx_helper.get_transport(self.config)
         self.testing_layer = self.transport.stack_client.network_layer
 
+    def assert_id_format_correct(self, node):
+        uuid, _sep, count = node["id"].partition('-')
+        self.assertEqual(len(uuid), 10)
+        self.assertTrue(int(count) > 0)
+
     def assert_nodes_equal(self, node1, node2):
-        # TODO: test id explicitly
-        node2["id"] = node1["id"]
-        self.assertEqual(node1.toString(), node2.toString())
+        self.assert_id_format_correct(node1)
+        self.assert_id_format_correct(node2)
+        id_stub = node1["id"].split('-')[0]
+        xml1 = node1.toString().replace(node1["id"], id_stub)
+        xml2 = node2.toString().replace(node2["id"], id_stub)
+        self.assertEqual(xml1, xml2)
 
     def assert_messages_equal(self, message1, message2):
         '''
@@ -71,11 +80,18 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(message1['to_addr'], message2['to_addr'])
         self.assertEqual(message1['from_addr'], message2['from_addr'])
 
+    def assert_ack(self, ack, message, whatsapp_id):
+        self.assertEqual(ack.payload['event_type'], 'ack')
+        self.assertEqual(ack.payload['user_message_id'], message['message_id'])
+        self.assertEqual(ack.payload['sent_message_id'], whatsapp_id)
+
     @inlineCallbacks
     def test_outbound(self):
         message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr='double fail!')
         node_received = yield self.testing_layer.data_received.get()
+        [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
         self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
+        self.assert_ack(ack, message_sent, node_received['id'])
 
     @inlineCallbacks
     def test_publish(self):
@@ -111,6 +127,8 @@ class TestingLayer(YowLayer):
         send to lower (no lower in this layer)
         '''
         reactor.callFromThread(self.data_received.put, data)
+        ack = AckProtocolEntity(_id=data['id'], _class='message')
+        self.receive(ack.toProtocolTreeNode())
 
     def send_to_transport(self, text, from_address):
         '''method to be used in testing'''
