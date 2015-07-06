@@ -62,8 +62,8 @@ class WhatsAppTransport(Transport):
     def teardown_transport(self):
         print "Stopping client ..."
         self.stack_client.client_stop()
-        yield self.redis._close()
         yield self.client_d
+        yield self.redis._close()
         print "Loop done."
 
     def handle_outbound_message(self, message):
