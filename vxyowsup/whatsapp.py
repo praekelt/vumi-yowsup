@@ -56,19 +56,19 @@ class WhatsAppTransport(Transport):
         stack_client = self.stack_client = StackClient(CREDENTIALS, self)
         self.client_d = deferToThread(stack_client.client_start)
         self.client_d.addErrback(self.catch_exit)
-        self.client_d.addErrback(self.print_error)
+        self.client_d.addErrback(self.log_error)
 
     @defer.inlineCallbacks
     def teardown_transport(self):
-        log.debug("Stopping client ...")
+        log.info("Stopping client ...")
         self.stack_client.client_stop()
         yield self.client_d
         yield self.redis._close()
-        log.debug("Loop done.")
+        log.info("Loop done.")
 
     def handle_outbound_message(self, message):
         # message is a vumi.message.TransportUserMessage
-        log.info('Sending %r' % (message.to_json(),))
+        log.debug('Sending %r' % (message.to_json(),))
         msg = TextMessageProtocolEntity(message['content'], to=message['to_addr'] + '@s.whatsapp.net')
         self.redis.setex(msg.getId(), self.config.ack_timeout, message['message_id'])
         self.stack_client.send_to_stack(msg)
@@ -87,9 +87,9 @@ class WhatsAppTransport(Transport):
 
     def catch_exit(self, f):
         f.trap(WhatsAppClientDone)
-        log.debug("Yowsup client killed.")
+        log.info("Yowsup client killed.")
 
-    def print_error(self, f):
+    def log_error(self, f):
         log.debug(f)
         return f
 
@@ -116,10 +116,10 @@ class StackClient(object):
         self.stack.loop(discrete=0, count=1, timeout=1)
 
     def client_stop(self):
-        log.debug("Stopping client ...")
+        log.info("Stopping client ...")
 
         def _stop():
-            log.debug("Sending disconnect ...")
+            log.info("Sending disconnect ...")
             self.whatsapp_interface.disconnect()
 
         def _kill():
