@@ -90,7 +90,7 @@ class WhatsAppTransport(Transport):
         log.info("Yowsup client killed.")
 
     def log_error(self, f):
-        log.debug(f)
+        log.error(f)
         return f
 
 
