@@ -157,7 +157,7 @@ class WhatsAppInterface(YowInterfaceLayer):
         self.toLower(receipt)
 
         log.debug('You have received a message, and thusly sent a receipt')
-        if echo = self.transport.config.echo_to:
+        if self.transport.config.echo_to:
             log.debug('Echoing message received by transport to %s' % self.transport.config.echo_to)
             reactor.callFromThread(self.transport.handle_outbound_message, TransportUserMessage(
                                    to_addr=self.transport.config.echo_to, from_addr=None,
