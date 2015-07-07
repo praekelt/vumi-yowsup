@@ -141,6 +141,7 @@ class WhatsAppInterface(YowInterfaceLayer):
     def __init__(self, transport):
         super(WhatsAppInterface, self).__init__()
         self.transport = transport
+        self.echo_to = self.transport.config.echo_to
 
     def send_to_human(self, msg):
         self.toLower(msg)
@@ -157,10 +158,10 @@ class WhatsAppInterface(YowInterfaceLayer):
         self.toLower(receipt)
 
         log.debug('You have received a message, and thusly sent a receipt')
-        if self.transport.config.echo_to:
-            log.debug('Echoing message received by transport to %s' % self.transport.config.echo_to)
+        if self.echo_to:
+            log.debug('Echoing message received by transport to %s' % self.echo_to)
             reactor.callFromThread(self.transport.handle_outbound_message, TransportUserMessage(
-                                   to_addr=self.transport.config.echo_to, from_addr=None,
+                                   to_addr=self.echo_to, from_addr=None,
                                    content=body, transport_name='whatsapp',
                                    transport_type='whatsapp'))
 
