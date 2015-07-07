@@ -32,6 +32,8 @@ class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
     ack_timeout = ConfigInt(
         'Length of time (integer) redis will store message ids in seconds (timeout for receiving acks)',
         default=60*60*24, static=True)
+    echo_to = ConfigText(
+        'Echo messages received by transport to given MSISDN', static=True)
 
 
 class WhatsAppClientDone(Exception):
@@ -155,13 +157,18 @@ class WhatsAppInterface(YowInterfaceLayer):
         self.toLower(receipt)
 
         log.debug('You have received a message, and thusly sent a receipt')
-        # log.debug("You are now sending a reply")
-        # self.send_to_human('iiii', from_address + '@s.whatsapp.net', "this transport's gone rogue")
+        if echo = self.transport.config.echo_to:
+            log.debug('Echoing message received by transport to %s' % self.transport.config.echo_to)
+            reactor.callFromThread(self.transport.handle_outbound_message, TransportUserMessage(
+                                   to_addr=self.transport.config.echo_to, from_addr=None,
+                                   content=body, transport_name='whatsapp',
+                                   transport_type='whatsapp'))
 
         reactor.callFromThread(self.transport.publish_message,
                                from_addr=from_address, content=body, to_addr=None,
                                transport_type=self.transport.transport_type,
-                               to_addr_type=TransportUserMessage.AT_MSISDN)
+                               to_addr_type=TransportUserMessage.AT_MSISDN,
+                               from_addr_type=TransportUserMessage.AT_MSISDN)
 
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
