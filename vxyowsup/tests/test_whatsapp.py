@@ -90,10 +90,10 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(ack.payload['user_message_id'], message['message_id'])
         self.assertEqual(ack.payload['sent_message_id'], whatsapp_id)
 
-    def assert_receipt(self, receipt, message, whatsapp_id):
-        # event_type is 'ack' for some reason
+    def assert_receipt(self, receipt, message):
         self.assertEqual(receipt.payload['event_type'], 'delivery_report')
-        self.assertEqual(receipt.payload['sent_message_id'], whatsapp_id)
+        self.assertEqual(receipt.payload['user_message_id'], message['message_id'])
+        self.assertEqual(receipt.payload['delivery_status'], 'delivered')
 
     @inlineCallbacks
     def test_outbound(self):
@@ -101,20 +101,20 @@ class TestWhatsAppTransport(VumiTestCase):
         node_received = yield self.testing_layer.data_received.get()
         self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
 
-        ack = self.tx_helper.get_dispatched_events()
-        self.assertFalse(ack)
+        acks = self.tx_helper.get_dispatched_events()
+        self.assertFalse(acks)
         self.testing_layer.send_ack(node_received)
         [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
+
         self.assert_ack(ack, message_sent, node_received['id'])
 
         self.tx_helper.clear_dispatched_events()
 
-        receipt = self.tx_helper.get_dispatched_events()
-        self.assertFalse(receipt)
+        receipts = self.tx_helper.get_dispatched_events()
+        self.assertFalse(receipts)
         self.testing_layer.send_receipt(node_received)
         [receipt] = yield self.tx_helper.wait_for_dispatched_events(1)
-        print receipt
-        self.assert_receipt(receipt, message_sent, node_received['id'])
+        self.assert_receipt(receipt, message_sent)
 
     @inlineCallbacks
     def test_publish(self):
@@ -161,7 +161,6 @@ class TestingLayer(YowLayer):
         send to lower (no lower in this layer)
         '''
         reactor.callFromThread(self.data_received.put, data)
-        self.send_ack(data)
 
     def send_to_transport(self, text, from_address):
         '''method to be used in testing'''
