@@ -1,4 +1,5 @@
 import base64
+import time
 
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.internet import reactor
@@ -9,6 +10,7 @@ from vumi.config import Config
 from vumi.errors import ConfigError
 from vumi.message import TransportUserMessage
 from vumi.transports.tests.helpers import TransportHelper
+from vumi.message import TransportEvent
 
 from vxyowsup.whatsapp import WhatsAppTransport
 from yowsup.stacks import YowStackBuilder
@@ -16,11 +18,14 @@ from yowsup.layers.logger import YowLoggerLayer
 from yowsup.layers import YowLayer
 from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
 from yowsup.layers.protocol_acks.protocolentities import AckProtocolEntity
+from yowsup.layers.protocol_receipts.protocolentities import IncomingReceiptProtocolEntity
+
+
 
 
 @staticmethod
 def getDummyCoreLayers():
-    return (TestingLayer, YowLoggerLayer)
+    return (TestingLayer,)
 
 
 def TUMessage_to_PTNode(message):
@@ -85,17 +90,35 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(ack.payload['user_message_id'], message['message_id'])
         self.assertEqual(ack.payload['sent_message_id'], whatsapp_id)
 
+    def assert_receipt(self, receipt, message, whatsapp_id):
+        # event_type is 'ack' for some reason
+        # self.assertEqual(receipt.payload['event_type'], 'receipt')
+        self.assertEqual(receipt.payload['sent_message_id'], whatsapp_id)
+
     @inlineCallbacks
     def test_outbound(self):
-        message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr='double fail!')
+        message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr='double fail!', from_addr=self.config.get('phone'))
         node_received = yield self.testing_layer.data_received.get()
-        [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
         self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
+
+        ack = self.tx_helper.get_dispatched_events()
+        self.assertFalse(ack)
+        self.testing_layer.send_ack(node_received)
+        [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
         self.assert_ack(ack, message_sent, node_received['id'])
+
+        self.tx_helper.clear_dispatched_events()
+
+        receipt = self.tx_helper.get_dispatched_events()
+        self.assertFalse(receipt)
+        self.testing_layer.send_receipt(node_received)
+        [receipt] = yield self.tx_helper.wait_for_dispatched_events(1)
+        print receipt
+        self.assert_receipt(receipt, message_sent, node_received['id'])
 
     @inlineCallbacks
     def test_publish(self):
-        message_sent = yield self.testing_layer.send_to_transport(text='Hi Vumi! :)', from_address='meeeeeeeee@s.whatsapp.net')
+        message_sent = yield self.testing_layer.send_to_transport(text='Hi Vumi! :)', from_address=self.config.get('phone') + '@s.whatsapp.net')
         [message_received] = yield self.tx_helper.wait_for_dispatched_inbound(1)
         self.assert_messages_equal(PTNode_to_TUMessage(message_sent), message_received)
 
@@ -120,6 +143,17 @@ class TestingLayer(YowLayer):
         '''
         self.toUpper(data)
 
+    def send_ack(self, node):
+        # TODO: rather send IncomingAckProtocolEntity and test extra fields
+        ack = AckProtocolEntity(_id=node['id'], _class='message')
+        self.receive(ack.toProtocolTreeNode())
+
+    def send_receipt(self, node):
+        # msg_class=None defualt indicates "delivered"
+        # alt: msg_class='read'
+        receipt = IncomingReceiptProtocolEntity(_id=node['id'], _from=node['from'], timestamp=node['t'], type='read')
+        self.receive(receipt.toProtocolTreeNode())
+
     def send(self, data):
         '''
         data is yowsup.structs.protocoltreenode.ProtocolTreeNode
@@ -127,8 +161,7 @@ class TestingLayer(YowLayer):
         send to lower (no lower in this layer)
         '''
         reactor.callFromThread(self.data_received.put, data)
-        ack = AckProtocolEntity(_id=data['id'], _class='message')
-        self.receive(ack.toProtocolTreeNode())
+        self.send_ack(data)
 
     def send_to_transport(self, text, from_address):
         '''method to be used in testing'''
