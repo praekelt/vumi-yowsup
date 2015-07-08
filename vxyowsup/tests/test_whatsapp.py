@@ -92,7 +92,7 @@ class TestWhatsAppTransport(VumiTestCase):
 
     def assert_receipt(self, receipt, message, whatsapp_id):
         # event_type is 'ack' for some reason
-        # self.assertEqual(receipt.payload['event_type'], 'receipt')
+        self.assertEqual(receipt.payload['event_type'], 'delivery_report')
         self.assertEqual(receipt.payload['sent_message_id'], whatsapp_id)
 
     @inlineCallbacks
