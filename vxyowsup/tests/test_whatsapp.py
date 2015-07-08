@@ -25,7 +25,7 @@ from yowsup.layers.protocol_receipts.protocolentities import IncomingReceiptProt
 
 @staticmethod
 def getDummyCoreLayers():
-    return (TestingLayer,)
+    return (TestingLayer, YowLoggerLayer)
 
 
 def TUMessage_to_PTNode(message):
