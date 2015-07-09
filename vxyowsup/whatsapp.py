@@ -85,7 +85,7 @@ class WhatsAppTransport(Transport):
         vumi_id = yield self.redis.get(whatsapp_id)
         if vumi_id:
             yield self.publish_delivery_report(user_message_id=vumi_id, delivery_status='delivered')
-            self.redis.delete(whatsapp_id)
+            yield self.redis.delete(whatsapp_id)
 
     def catch_exit(self, f):
         f.trap(WhatsAppClientDone)
