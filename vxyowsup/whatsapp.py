@@ -53,6 +53,7 @@ class WhatsAppTransport(Transport):
         self.redis = yield TxRedisManager.from_config(config.redis_manager)
         self.redis = self.redis.sub_manager(self.transport_name)
 
+        self.our_msisdn = config.phone
         CREDENTIALS = (config.phone, config.password)
 
         stack_client = self.stack_client = StackClient(CREDENTIALS, self)
@@ -160,16 +161,20 @@ class WhatsAppInterface(YowInterfaceLayer):
         log.debug('You have received a message, and thusly sent a receipt')
         if self.echo_to:
             log.debug('Echoing message received by transport to %s' % self.echo_to)
-            reactor.callFromThread(self.transport.handle_outbound_message, TransportUserMessage(
-                                   to_addr=self.echo_to, from_addr=None,
-                                   content=body, transport_name='whatsapp',
-                                   transport_type='whatsapp'))
+            reactor.callFromThread(
+                self.transport.handle_outbound_message,
+                TransportUserMessage(
+                    to_addr=self.echo_to, from_addr=self.transport.our_msisdn,
+                    content=body, transport_name='whatsapp',
+                    transport_type='whatsapp'))
 
-        reactor.callFromThread(self.transport.publish_message,
-                               from_addr=from_address, content=body, to_addr=None,
-                               transport_type=self.transport.transport_type,
-                               to_addr_type=TransportUserMessage.AT_MSISDN,
-                               from_addr_type=TransportUserMessage.AT_MSISDN)
+        reactor.callFromThread(
+            self.transport.publish_message,
+            from_addr=from_address, content=body,
+            to_addr=self.transport.our_msisdn,
+            transport_type=self.transport.transport_type,
+            to_addr_type=TransportUserMessage.AT_MSISDN,
+            from_addr_type=TransportUserMessage.AT_MSISDN)
 
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):

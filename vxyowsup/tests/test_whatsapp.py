@@ -31,15 +31,16 @@ def TUMessage_to_PTNode(message):
                                      + '@s.whatsapp.net').toProtocolTreeNode()
 
 
-def PTNode_to_TUMessage(node):
+def PTNode_to_TUMessage(node, to_addr):
     '''
     node is ProtocolTreeNode
     returns TransportUserMessage
     '''
     message = TextMessageProtocolEntity.fromProtocolTreeNode(node)
-    return TransportUserMessage(to_addr=None, from_addr=message.getFrom(False),
-                                content=message.getBody(), transport_name='whatsapp',
-                                transport_type='whatsapp')
+    return TransportUserMessage(
+        to_addr=to_addr, from_addr=message.getFrom(False),
+        content=message.getBody(), transport_name='whatsapp',
+        transport_type='whatsapp')
 
 
 class TestWhatsAppTransport(VumiTestCase):
@@ -50,7 +51,7 @@ class TestWhatsAppTransport(VumiTestCase):
         self.tx_helper = self.add_helper(TransportHelper(WhatsAppTransport))
         self.config = {
             'cc': '27',
-            'phone': '27000000000',
+            'phone': '27010203040',
             'password': base64.b64encode("xxx"),
             #'redis_manager': {'key_prefix': "vumi:whatsapp", 'db': 1},
         }
@@ -123,9 +124,14 @@ class TestWhatsAppTransport(VumiTestCase):
 
     @inlineCallbacks
     def test_publish(self):
-        message_sent = yield self.testing_layer.send_to_transport(text='Hi Vumi! :)', from_address=self.config.get('phone') + '@s.whatsapp.net')
-        [message_received] = yield self.tx_helper.wait_for_dispatched_inbound(1)
-        self.assert_messages_equal(PTNode_to_TUMessage(message_sent), message_received)
+        message_sent = yield self.testing_layer.send_to_transport(
+            text='Hi Vumi! :)',
+            from_address=self.config.get('phone') + '@s.whatsapp.net')
+        [message_received] = (
+            yield self.tx_helper.wait_for_dispatched_inbound(1))
+        self.assert_messages_equal(
+            PTNode_to_TUMessage(message_sent, '27010203040'),
+            message_received)
 
 
 class TestingLayer(YowLayer):
