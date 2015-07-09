@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="vxyowsup",
-    version="0.1.0",
+    version="0.1.1",
     url='http://github.com/praekelt/vumi-yowsup',
     license='BSD',
     description="A WhatsApp transport for Vumi.",
