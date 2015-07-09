@@ -83,9 +83,9 @@ class WhatsAppTransport(Transport):
     @defer.inlineCallbacks
     def _send_delivery_report(self, whatsapp_id):
         vumi_id = yield self.redis.get(whatsapp_id)
-        yield self.publish_delivery_report(user_message_id=vumi_id, delivery_status='delivered')
-        # safe to remove key from redis here?
-        # would be nice to remove to prevent sending delivery report for both delivered and 'read'
+        if vumi_id:
+            yield self.publish_delivery_report(user_message_id=vumi_id, delivery_status='delivered')
+            yield self.redis.delete(whatsapp_id)
 
     def catch_exit(self, f):
         f.trap(WhatsAppClientDone)
