@@ -1,4 +1,5 @@
 import base64
+import time
 
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.internet import reactor
@@ -144,7 +145,7 @@ class TestingLayer(YowLayer):
     def send_receipt(self, node):
         # msg_class=None defualt indicates "delivered"
         # alt: msg_class='read'
-        receipt = IncomingReceiptProtocolEntity(_id=node['id'], _from=node['to'], timestamp=node['id'].split('-')[0], type='read')
+        receipt = IncomingReceiptProtocolEntity(_id=node['id'], _from=node['to'], timestamp=str(int(time.time())), type='read')
         self.receive(receipt.toProtocolTreeNode())
 
     def send(self, data):
