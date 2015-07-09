@@ -82,9 +82,8 @@ class WhatsAppTransport(Transport):
 
     @defer.inlineCallbacks
     def _send_delivery_report(self, whatsapp_id):
-        exists = yield self.redis.exists(whatsapp_id)
-        if exists:
-            vumi_id = yield self.redis.get(whatsapp_id)
+        vumi_id = yield self.redis.get(whatsapp_id)
+        if vumi_id:
             yield self.publish_delivery_report(user_message_id=vumi_id, delivery_status='delivered')
             self.redis.delete(whatsapp_id)
 
