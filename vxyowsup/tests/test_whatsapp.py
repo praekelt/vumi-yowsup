@@ -38,7 +38,7 @@ def PTNode_to_TUMessage(node, to_addr):
     '''
     message = TextMessageProtocolEntity.fromProtocolTreeNode(node)
     return TransportUserMessage(
-        to_addr=to_addr, from_addr=message.getFrom(False),
+        to_addr=to_addr, from_addr="+" + message.getFrom(False),
         content=message.getBody(), transport_name='whatsapp',
         transport_type='whatsapp')
 
@@ -126,11 +126,11 @@ class TestWhatsAppTransport(VumiTestCase):
     def test_publish(self):
         message_sent = yield self.testing_layer.send_to_transport(
             text='Hi Vumi! :)',
-            from_address=self.config.get('phone') + '@s.whatsapp.net')
+            from_address='123345@s.whatsapp.net')
         [message_received] = (
             yield self.tx_helper.wait_for_dispatched_inbound(1))
         self.assert_messages_equal(
-            PTNode_to_TUMessage(message_sent, '27010203040'),
+            PTNode_to_TUMessage(message_sent, '+27010203040'),
             message_received)
 
 

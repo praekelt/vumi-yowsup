@@ -40,6 +40,11 @@ class WhatsAppClientDone(Exception):
     """ Signal that the Yowsup client is done. """
 
 
+def msisdn_to_whatsapp(msisdn):
+    """ Convert an MSISDN to a WhatsApp address. """
+    return msisdn.lstrip('+') + '@s.whatsapp.net'
+
+
 class WhatsAppTransport(Transport):
 
     CONFIG_CLASS = WhatsAppTransportConfig
@@ -53,7 +58,7 @@ class WhatsAppTransport(Transport):
         self.redis = yield TxRedisManager.from_config(config.redis_manager)
         self.redis = self.redis.sub_manager(self.transport_name)
 
-        self.our_msisdn = config.phone
+        self.our_msisdn = "+" + config.phone
         CREDENTIALS = (config.phone, config.password)
 
         stack_client = self.stack_client = StackClient(CREDENTIALS, self)
@@ -72,7 +77,8 @@ class WhatsAppTransport(Transport):
     def handle_outbound_message(self, message):
         # message is a vumi.message.TransportUserMessage
         log.debug('Sending %r' % (message.to_json(),))
-        msg = TextMessageProtocolEntity(message['content'], to=message['to_addr'] + '@s.whatsapp.net')
+        msg = TextMessageProtocolEntity(
+            message['content'], to=msisdn_to_whatsapp(message['to_addr']))
         self.redis.setex(msg.getId(), self.config.ack_timeout, message['message_id'])
         self.stack_client.send_to_stack(msg)
 
@@ -149,12 +155,12 @@ class WhatsAppInterface(YowInterfaceLayer):
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
-        from_address = messageProtocolEntity.getFrom(False)
+        from_address = "+" + messageProtocolEntity.getFrom(False)
         body = messageProtocolEntity.getBody()
 
         receipt = OutgoingReceiptProtocolEntity(
             messageProtocolEntity.getId(),
-            from_address + '@s.whatsapp.net', 'read',
+            msisdn_to_whatsapp(from_address), 'read',
             messageProtocolEntity.getParticipant())
         self.toLower(receipt)
 
