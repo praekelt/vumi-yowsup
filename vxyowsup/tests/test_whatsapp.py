@@ -57,6 +57,7 @@ class TestWhatsAppTransport(VumiTestCase):
 
         self.transport = yield self.tx_helper.get_transport(self.config)
         self.testing_layer = self.transport.stack_client.network_layer
+        self.redis = self.transport.redis
 
     def assert_id_format_correct(self, node):
         uuid, _sep, count = node["id"].partition('-')
@@ -79,14 +80,17 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(message1['to_addr'], message2['to_addr'])
         self.assertEqual(message1['from_addr'], message2['from_addr'])
 
-    def assert_ack(self, ack, message, whatsapp_id):
+    def assert_ack(self, ack, node):
+        whatsapp_id = node['id']
+        vumi_id = yield self.redis.get(whatsapp_id)
         self.assertEqual(ack.payload['event_type'], 'ack')
-        self.assertEqual(ack.payload['user_message_id'], message['message_id'])
+        self.assertEqual(ack.payload['user_message_id'], vumi_id)
         self.assertEqual(ack.payload['sent_message_id'], whatsapp_id)
 
-    def assert_receipt(self, receipt, message):
+    def assert_receipt(self, receipt, node):
+        vumi_id = yield self.redis.get(node['id'])
         self.assertEqual(receipt.payload['event_type'], 'delivery_report')
-        self.assertEqual(receipt.payload['user_message_id'], message['message_id'])
+        self.assertEqual(receipt.payload['user_message_id'], vumi_id)
         self.assertEqual(receipt.payload['delivery_status'], 'delivered')
 
     @inlineCallbacks
@@ -97,18 +101,22 @@ class TestWhatsAppTransport(VumiTestCase):
 
         acks = self.tx_helper.get_dispatched_events()
         self.assertFalse(acks)
+
         self.testing_layer.send_ack(node_received)
         [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
-
-        self.assert_ack(ack, message_sent, node_received['id'])
+        self.assert_ack(ack, node_received)
 
         self.tx_helper.clear_dispatched_events()
 
-        receipts = self.tx_helper.get_dispatched_events()
-        self.assertFalse(receipts)
         self.testing_layer.send_receipt(node_received)
         [receipt] = yield self.tx_helper.wait_for_dispatched_events(1)
-        self.assert_receipt(receipt, message_sent)
+        self.assert_receipt(receipt, node_received)
+
+        self.tx_helper.clear_dispatched_events()
+
+        self.testing_layer.send_receipt(node_received, 'read')
+        receipts = self.tx_helper.get_dispatched_events()
+        self.assertFalse(receipts)
 
     @inlineCallbacks
     def test_publish(self):
@@ -142,10 +150,10 @@ class TestingLayer(YowLayer):
         ack = AckProtocolEntity(_id=node['id'], _class='message')
         self.receive(ack.toProtocolTreeNode())
 
-    def send_receipt(self, node):
-        # msg_class=None defualt indicates "delivered"
-        # alt: msg_class='read'
-        receipt = IncomingReceiptProtocolEntity(_id=node['id'], _from=node['to'], timestamp=str(int(time.time())), type='read')
+    def send_receipt(self, node, status=None):
+        # status=None defualt indicates 'delivered'
+        # alt: status='read'
+        receipt = IncomingReceiptProtocolEntity(_id=node['id'], _from=node['to'], timestamp=str(int(time.time())), type=status)
         self.receive(receipt.toProtocolTreeNode())
 
     def send(self, data):
