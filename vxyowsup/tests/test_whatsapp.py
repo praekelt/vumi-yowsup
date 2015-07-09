@@ -1,16 +1,11 @@
 import base64
-import time
 
 from twisted.internet.defer import inlineCallbacks, DeferredQueue
 from twisted.internet import reactor
 
-from vumi.tests.utils import LogCatcher
 from vumi.tests.helpers import VumiTestCase
-from vumi.config import Config
-from vumi.errors import ConfigError
 from vumi.message import TransportUserMessage
 from vumi.transports.tests.helpers import TransportHelper
-from vumi.message import TransportEvent
 
 from vxyowsup.whatsapp import WhatsAppTransport
 from yowsup.stacks import YowStackBuilder
@@ -19,8 +14,6 @@ from yowsup.layers import YowLayer
 from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
 from yowsup.layers.protocol_acks.protocolentities import AckProtocolEntity
 from yowsup.layers.protocol_receipts.protocolentities import IncomingReceiptProtocolEntity
-
-
 
 
 @staticmethod
@@ -97,7 +90,7 @@ class TestWhatsAppTransport(VumiTestCase):
 
     @inlineCallbacks
     def test_outbound(self):
-        message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr='double fail!', from_addr=self.config.get('phone'))
+        message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr=self.config.get('phone'), from_addr='vumi')
         node_received = yield self.testing_layer.data_received.get()
         self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
 
@@ -151,7 +144,7 @@ class TestingLayer(YowLayer):
     def send_receipt(self, node):
         # msg_class=None defualt indicates "delivered"
         # alt: msg_class='read'
-        receipt = IncomingReceiptProtocolEntity(_id=node['id'], _from=node['from'], timestamp=node['t'], type='read')
+        receipt = IncomingReceiptProtocolEntity(_id=node['id'], _from=node['to'], timestamp=node['id'].split('-')[0], type='read')
         self.receive(receipt.toProtocolTreeNode())
 
     def send(self, data):
