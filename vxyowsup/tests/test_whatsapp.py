@@ -112,6 +112,9 @@ class TestWhatsAppTransport(VumiTestCase):
         [receipt] = yield self.tx_helper.wait_for_dispatched_events(1)
         self.assert_receipt(receipt, node_received)
 
+        vumi_id = yield self.redis.get(node_received['id'])
+        self.assertFalse(vumi_id)
+
         self.tx_helper.clear_dispatched_events()
 
         self.testing_layer.send_receipt(node_received, 'read')
