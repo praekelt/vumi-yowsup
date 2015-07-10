@@ -74,12 +74,9 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assert_id_format_correct(node1)
         self.assert_id_format_correct(node2)
         id_stub = node1["id"].split('-')[0]
-        self.assertEqual(node2["id"].split('-')[0], id_stub)
-        self.assertEqual(node1['to'], node2['to'])
-        self.assertEqual(node1.getChild('body'), node2.getChild('body'))
-        #xml1 = node1.toString().replace(node1["id"], id_stub)
-        #xml2 = node2.toString().replace(node2["id"], id_stub)
-        #self.assertEqual(xml1, xml2)
+        xml1 = node1.toString().replace(node1["id"], id_stub)
+        xml2 = node2.toString().replace(node2["id"], id_stub)
+        self.assertEqual(xml1, xml2)
 
     def assert_messages_equal(self, message1, message2):
         '''

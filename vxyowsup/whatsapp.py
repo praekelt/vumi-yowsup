@@ -78,7 +78,8 @@ class WhatsAppTransport(Transport):
         # message is a vumi.message.TransportUserMessage
         log.debug('Sending %r' % (message.to_json(),))
         msg = TextMessageProtocolEntity(
-            message['content'].encode("UTF-8"), to=msisdn_to_whatsapp(message['to_addr']))
+            message['content'].encode("UTF-8"),
+            to=msisdn_to_whatsapp(message['to_addr']).encode("UTF-8"))
         self.redis.setex(msg.getId(), self.config.ack_timeout, message['message_id'])
         self.stack_client.send_to_stack(msg)
 
@@ -156,11 +157,13 @@ class WhatsAppInterface(YowInterfaceLayer):
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
         from_address = "+" + messageProtocolEntity.getFrom(False)
+        from_address = from_address.decode("UTF-8")
         body = messageProtocolEntity.getBody().decode("UTF-8")
 
         receipt = OutgoingReceiptProtocolEntity(
             messageProtocolEntity.getId(),
-            msisdn_to_whatsapp(from_address), 'read',
+            msisdn_to_whatsapp(from_address).encode("UTF-8"),
+            'read',
             messageProtocolEntity.getParticipant())
         self.toLower(receipt)
 
