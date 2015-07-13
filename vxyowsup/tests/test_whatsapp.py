@@ -1,3 +1,5 @@
+# -*- coding: UTF-8 -*-
+
 import base64
 import time
 
@@ -17,6 +19,9 @@ from yowsup.layers.protocol_acks.protocolentities import AckProtocolEntity
 from yowsup.layers.protocol_receipts.protocolentities import IncomingReceiptProtocolEntity
 
 
+string_of_doom = u"Zoë the Destroyer of ASCII".encode("UTF-8")
+
+
 @staticmethod
 def getDummyCoreLayers():
     return (TestingLayer, YowLoggerLayer)
@@ -27,7 +32,7 @@ def TUMessage_to_PTNode(message):
     message is TransportUserMessage
     returns ProtocolTreeNode
     '''
-    return TextMessageProtocolEntity(message['content'], to=message['to_addr']
+    return TextMessageProtocolEntity(message['content'].encode("UTF-8"), to=message['to_addr']
                                      + '@s.whatsapp.net').toProtocolTreeNode()
 
 
@@ -39,7 +44,7 @@ def PTNode_to_TUMessage(node, to_addr):
     message = TextMessageProtocolEntity.fromProtocolTreeNode(node)
     return TransportUserMessage(
         to_addr=to_addr, from_addr="+" + message.getFrom(False),
-        content=message.getBody(), transport_name='whatsapp',
+        content=message.getBody().decode("UTF-8"), transport_name='whatsapp',
         transport_type='whatsapp')
 
 
@@ -126,6 +131,45 @@ class TestWhatsAppTransport(VumiTestCase):
     def test_publish(self):
         message_sent = yield self.testing_layer.send_to_transport(
             text='Hi Vumi! :)',
+            from_address='123345@s.whatsapp.net')
+        [message_received] = (
+            yield self.tx_helper.wait_for_dispatched_inbound(1))
+        self.assert_messages_equal(
+            PTNode_to_TUMessage(message_sent, '+27010203040'),
+            message_received)
+
+    @inlineCallbacks
+    def test_non_ascii_outbound(self):
+        message_sent = yield self.tx_helper.make_dispatch_outbound(content=string_of_doom.decode("UTF-8"), to_addr=self.config.get('phone'), from_addr='vumi')
+        node_received = yield self.testing_layer.data_received.get()
+        self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
+
+        acks = self.tx_helper.get_dispatched_events()
+        self.assertFalse(acks)
+
+        self.testing_layer.send_ack(node_received)
+        [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
+        self.assert_ack(ack, node_received)
+
+        self.tx_helper.clear_dispatched_events()
+
+        self.testing_layer.send_receipt(node_received)
+        [receipt] = yield self.tx_helper.wait_for_dispatched_events(1)
+        self.assert_receipt(receipt, node_received)
+
+        vumi_id = yield self.redis.get(node_received['id'])
+        self.assertFalse(vumi_id)
+
+        self.tx_helper.clear_dispatched_events()
+
+        self.testing_layer.send_receipt(node_received, 'read')
+        receipts = self.tx_helper.get_dispatched_events()
+        self.assertFalse(receipts)
+
+    @inlineCallbacks
+    def test_non_ascii_publish(self):
+        message_sent = yield self.testing_layer.send_to_transport(
+            text=string_of_doom,
             from_address='123345@s.whatsapp.net')
         [message_received] = (
             yield self.tx_helper.wait_for_dispatched_inbound(1))
