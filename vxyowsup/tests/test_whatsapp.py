@@ -57,6 +57,8 @@ class TestWhatsAppTransport(VumiTestCase):
     @inlineCallbacks
     def setUp(self):
         self.patch(YowStackBuilder, 'getCoreLayers', getDummyCoreLayers)
+        self.patch(
+            YowInterfaceLayer, 'getLayerInterface', dummy_getLayerInterface)
         self.tx_helper = self.add_helper(TransportHelper(WhatsAppTransport))
         self.config = {
             'cc': '27',
@@ -89,6 +91,7 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(message1['to_addr'], message2['to_addr'])
         self.assertEqual(message1['from_addr'], message2['from_addr'])
 
+    @inlineCallbacks
     def assert_ack(self, ack, node):
         whatsapp_id = node['id']
         vumi_id = yield self.redis.get(whatsapp_id)
@@ -96,30 +99,33 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(ack.payload['user_message_id'], vumi_id)
         self.assertEqual(ack.payload['sent_message_id'], whatsapp_id)
 
-    def assert_receipt(self, receipt, node):
-        vumi_id = yield self.redis.get(node['id'])
+    def assert_receipt(self, receipt, node, message_id):
+        '''Assert that the receipt is valid. We need to pass in the expected
+        message id, because the transport deletes the reference after it sends
+        the delivery report.'''
         self.assertEqual(receipt.payload['event_type'], 'delivery_report')
-        self.assertEqual(receipt.payload['user_message_id'], vumi_id)
+        self.assertEqual(receipt.payload['user_message_id'], message_id)
         self.assertEqual(receipt.payload['delivery_status'], 'delivered')
 
     @inlineCallbacks
     def test_outbound(self):
         message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr=self.config.get('phone'), from_addr='vumi')
         node_received = yield self.testing_layer.data_received.get()
-        self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
+        self.assert_nodes_equal(
+            TUMessage_to_PTNode(message_sent), node_received)
 
         acks = self.tx_helper.get_dispatched_events()
         self.assertFalse(acks)
 
         self.testing_layer.send_ack(node_received)
         [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
-        self.assert_ack(ack, node_received)
+        yield self.assert_ack(ack, node_received)
 
         self.tx_helper.clear_dispatched_events()
 
         self.testing_layer.send_receipt(node_received)
         [receipt] = yield self.tx_helper.wait_for_dispatched_events(1)
-        self.assert_receipt(receipt, node_received)
+        self.assert_receipt(receipt, node_received, message_sent['message_id'])
 
         vumi_id = yield self.redis.get(node_received['id'])
         self.assertFalse(vumi_id)
@@ -145,20 +151,22 @@ class TestWhatsAppTransport(VumiTestCase):
     def test_non_ascii_outbound(self):
         message_sent = yield self.tx_helper.make_dispatch_outbound(content=string_of_doom.decode("UTF-8"), to_addr=self.config.get('phone'), from_addr='vumi')
         node_received = yield self.testing_layer.data_received.get()
-        self.assert_nodes_equal(TUMessage_to_PTNode(message_sent), node_received)
+        self.assert_nodes_equal(
+            TUMessage_to_PTNode(message_sent), node_received)
 
         acks = self.tx_helper.get_dispatched_events()
         self.assertFalse(acks)
 
         self.testing_layer.send_ack(node_received)
         [ack] = yield self.tx_helper.wait_for_dispatched_events(1)
-        self.assert_ack(ack, node_received)
+        yield self.assert_ack(ack, node_received)
 
         self.tx_helper.clear_dispatched_events()
 
         self.testing_layer.send_receipt(node_received)
         [receipt] = yield self.tx_helper.wait_for_dispatched_events(1)
-        self.assert_receipt(receipt, node_received)
+        self.assert_receipt(
+            receipt, node_received, message_sent['message_id'])
 
         vumi_id = yield self.redis.get(node_received['id'])
         self.assertFalse(vumi_id)
@@ -179,6 +187,16 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assert_messages_equal(
             PTNode_to_TUMessage(message_sent, '+27010203040'),
             message_received)
+
+
+def dummy_getLayerInterface(parent_interface, layer_cls):
+    if layer_cls.__name__ == 'YowNetworkLayer':
+        return DummyNetworkLayer()
+
+
+class DummyNetworkLayer(object):
+    def connect(self):
+        pass
 
 
 class TestingLayer(YowLayer):
