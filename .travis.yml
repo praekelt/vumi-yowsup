@@ -18,9 +18,11 @@ matrix:
       env: TWISTED_VERSION="Twisted" NO_COVERAGE="1"
 install:
   - "pip install ${TWISTED_VERSION}"
-  - "pip install -r requirements.txt --use-wheel"
-  - "pip install coveralls --use-wheel"
+  - "pip install -r requirements.txt"
+  - "pip install coveralls"
+  - "pip install flake8"
 script:
+  - flake8 vxyowsup
   - if [ -z "$NO_COVERAGE" ]; then COVERAGE_CMD="coverage run --source=vxyowsup"; else COVERAGE_CMD=""; fi
   - VUMITEST_REDIS_DB=1 $COVERAGE_CMD `which trial` vxyowsup
 after_success:

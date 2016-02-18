@@ -14,9 +14,12 @@ from vxyowsup.whatsapp import WhatsAppTransport
 from yowsup.stacks import YowStackBuilder
 from yowsup.layers.logger import YowLoggerLayer
 from yowsup.layers import YowLayer
-from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
+from yowsup.layers.interface import YowInterfaceLayer
+from yowsup.layers.protocol_messages.protocolentities import (
+    TextMessageProtocolEntity)
 from yowsup.layers.protocol_acks.protocolentities import AckProtocolEntity
-from yowsup.layers.protocol_receipts.protocolentities import IncomingReceiptProtocolEntity
+from yowsup.layers.protocol_receipts.protocolentities import (
+    IncomingReceiptProtocolEntity)
 
 
 string_of_doom = u"Zoë the Destroyer of ASCII".encode("UTF-8")
@@ -32,8 +35,9 @@ def TUMessage_to_PTNode(message):
     message is TransportUserMessage
     returns ProtocolTreeNode
     '''
-    return TextMessageProtocolEntity(message['content'].encode("UTF-8"), to=message['to_addr']
-                                     + '@s.whatsapp.net').toProtocolTreeNode()
+    return TextMessageProtocolEntity(
+        message['content'].encode("UTF-8"), to=message['to_addr'] +
+        '@s.whatsapp.net').toProtocolTreeNode()
 
 
 def PTNode_to_TUMessage(node, to_addr):
@@ -58,7 +62,6 @@ class TestWhatsAppTransport(VumiTestCase):
             'cc': '27',
             'phone': '27010203040',
             'password': base64.b64encode("xxx"),
-            #'redis_manager': {'key_prefix': "vumi:whatsapp", 'db': 1},
         }
 
         self.transport = yield self.tx_helper.get_transport(self.config)
@@ -184,14 +187,10 @@ class TestingLayer(YowLayer):
         YowLayer.__init__(self)
         self.data_received = DeferredQueue()
 
-    def onEvent(self, event):
-        print("Event at TestingLayer")
-        print(event.getName())
-
     def receive(self, data):
         '''
-        data would've been decrypted bytes,
-        but in the testing layer they're yowsup.structs.protocoltreenode.ProtocolTreeNode
+        data would've been decrypted bytes, but in the testing layer they're
+        yowsup.structs.protocoltreenode.ProtocolTreeNode
         for convenience
         receive from lower (no lower in this layer)
         send to upper
@@ -206,7 +205,9 @@ class TestingLayer(YowLayer):
     def send_receipt(self, node, status=None):
         # status=None defualt indicates 'delivered'
         # alt: status='read'
-        receipt = IncomingReceiptProtocolEntity(_id=node['id'], _from=node['to'], timestamp=str(int(time.time())), type=status)
+        receipt = IncomingReceiptProtocolEntity(
+            _id=node['id'], _from=node['to'],
+            timestamp=str(int(time.time())), type=status)
         self.receive(receipt.toProtocolTreeNode())
 
     def send(self, data):
@@ -219,6 +220,7 @@ class TestingLayer(YowLayer):
 
     def send_to_transport(self, text, from_address):
         '''method to be used in testing'''
-        message = TextMessageProtocolEntity(text, _from=from_address).toProtocolTreeNode()
+        message = TextMessageProtocolEntity(
+            text, _from=from_address).toProtocolTreeNode()
         self.receive(message)
         return message
