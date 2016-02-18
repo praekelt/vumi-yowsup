@@ -1,23 +1,16 @@
 language: python
 python:
-  - "2.6"
   - "2.7"
-env:
-  # Test against the latest version of Twisted.
-  - TWISTED_VERSION="Twisted"
 services:
   - redis-server
 matrix:
   include:
-    # Test against the oldest version of Twisted that we claim to support
-    # This is a separate matrix inclusion to avoid spawning unnecessary builds.
-    - python: "2.7"
-      env: TWISTED_VERSION="Twisted==13.1.0"
     # Test on pypy without coverage, because it's unnecessary and very slow.
     - python: "pypy"
-      env: TWISTED_VERSION="Twisted" NO_COVERAGE="1"
+        env: PYPY_VERSION="4.0.1" NO_COVERAGE=1
+before_install:
+  - if [ ! -z "$PYPY_VERSION" ]; then source utils/setup-pypy-travis.sh; fi
 install:
-  - "pip install ${TWISTED_VERSION}"
   - "pip install -r requirements.txt"
   - "pip install coveralls"
   - "pip install flake8"
