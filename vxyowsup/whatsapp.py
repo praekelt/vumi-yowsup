@@ -120,7 +120,7 @@ class StackClient(object):
         self.transport = transport
 
         self.stack = self.STACK_BUILDER.getDefaultStack(
-            layer=WhatsAppInterface(transport), media=False)
+            layer=WhatsAppInterface(transport), media=False, axolotl=True)
         self.stack.setCredentials(self.CREDENTIALS)
 
         self.network_layer = self.stack.getLayer(0)
