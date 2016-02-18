@@ -10,7 +10,7 @@ from vumi.tests.helpers import VumiTestCase
 from vumi.message import TransportUserMessage
 from vumi.transports.tests.helpers import TransportHelper
 
-from vxyowsup.whatsapp import WhatsAppTransport
+from vxyowsup.whatsapp import WhatsAppTransport, msisdn_to_whatsapp
 from yowsup.stacks import YowStackBuilder
 from yowsup.layers.logger import YowLoggerLayer
 from yowsup.layers import YowLayer
@@ -107,9 +107,17 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(receipt.payload['user_message_id'], message_id)
         self.assertEqual(receipt.payload['delivery_status'], 'delivered')
 
+    def add_auth_skip(self, number):
+        layer = self.transport.stack_client.stack.getLayer(2)
+        jid = msisdn_to_whatsapp(number)
+        layer.skipEncJids.append(jid)
+
     @inlineCallbacks
     def test_outbound(self):
-        message_sent = yield self.tx_helper.make_dispatch_outbound(content='fail!', to_addr=self.config.get('phone'), from_addr='vumi')
+        self.add_auth_skip(self.config.get('phone'))
+        message_sent = yield self.tx_helper.make_dispatch_outbound(
+            content='fail!', to_addr=self.config.get('phone'),
+            from_addr='vumi')
         node_received = yield self.testing_layer.data_received.get()
         self.assert_nodes_equal(
             TUMessage_to_PTNode(message_sent), node_received)
@@ -149,7 +157,10 @@ class TestWhatsAppTransport(VumiTestCase):
 
     @inlineCallbacks
     def test_non_ascii_outbound(self):
-        message_sent = yield self.tx_helper.make_dispatch_outbound(content=string_of_doom.decode("UTF-8"), to_addr=self.config.get('phone'), from_addr='vumi')
+        self.add_auth_skip(self.config.get('phone'))
+        message_sent = yield self.tx_helper.make_dispatch_outbound(
+            content=string_of_doom.decode("UTF-8"),
+            to_addr=self.config.get('phone'), from_addr='vumi')
         node_received = yield self.testing_layer.data_received.get()
         self.assert_nodes_equal(
             TUMessage_to_PTNode(message_sent), node_received)
