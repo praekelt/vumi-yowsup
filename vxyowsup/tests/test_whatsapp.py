@@ -228,6 +228,19 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(
             status['message'], 'Inbound message successfully processed')
 
+    @inlineCallbacks
+    def test_repeat_status(self):
+        '''If two status messages are sent for the same component with the
+        same status, only one of them should go through.'''
+        yield self.transport.add_status(
+            component='inbound', status='ok', type='inbound_success',
+            message='Inbound message successfully processed')
+        yield self.transport.add_status(
+            component='inbound', status='ok', type='inbound_success',
+            message='Inbound message successfully processed')
+        statuses = yield self.tx_helper.get_dispatched_statuses()
+        self.assertEqual(len(statuses), 1)
+
 
 def dummy_getLayerInterface(parent_interface, layer_cls):
     if layer_cls.__name__ == 'YowNetworkLayer':
