@@ -1,6 +1,5 @@
 # -*- test-case-name: vumi.transports.whatsapp.tests.test_whatsapp -*-
-from twisted.internet import defer
-from twisted.internet import reactor
+from twisted.internet import defer, reactor
 from twisted.internet.threads import deferToThread
 
 from vumi.transports.base import Transport
@@ -8,6 +7,7 @@ from vumi.config import ConfigText, ConfigDict, ConfigInt
 from vumi import log
 from vumi.message import TransportUserMessage
 from vumi.persist.txredis_manager import TxRedisManager
+from vumi.utils import StatusEdgeDetector
 
 from yowsup.stacks import YowStackBuilder
 
@@ -70,6 +70,8 @@ class WhatsAppTransport(Transport):
         self.client_d.addErrback(self.catch_exit)
         self.client_d.addErrback(self.log_error)
 
+        self.status_detect = StatusEdgeDetector()
+
     @defer.inlineCallbacks
     def teardown_transport(self):
         log.info("Stopping client ...")
@@ -78,9 +80,16 @@ class WhatsAppTransport(Transport):
         yield self.redis._close()
         log.info("Loop done.")
 
+    def add_status(self, **kw):
+        '''Publishes a status if it is not a repeat of the previously
+        published status.'''
+        if self.status_detect.check_status(**kw):
+            return self.publish_status(**kw)
+        return defer.succeed(None)
+
     def handle_outbound_message(self, message):
         # message is a vumi.message.TransportUserMessage
-        log.debug('Sending %r' % (message.to_json(),))
+        log.info('Sending message: %s' % (message.to_json(),))
         msg = TextMessageProtocolEntity(
             message['content'].encode("UTF-8"),
             to=msisdn_to_whatsapp(message['to_addr']).encode("UTF-8"))
@@ -109,6 +118,16 @@ class WhatsAppTransport(Transport):
     def log_error(self, f):
         log.error(f)
         return f
+
+    def handle_inbound_error(self, error, message):
+        return self.add_status(
+            component='inbound', status='degraded', type='inbound_error',
+            message=error, details={'message': message})
+
+    def handle_inbound_success(self):
+        return self.add_status(
+            component='inbound', status='ok', type='inbound_success',
+            message='Inbound message successfully processed')
 
 
 class StackClient(object):
@@ -163,9 +182,21 @@ class WhatsAppInterface(YowInterfaceLayer):
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
-        from_address = "+" + messageProtocolEntity.getFrom(False)
-        from_address = from_address.decode("UTF-8")
-        body = messageProtocolEntity.getBody().decode("UTF-8")
+        log.info('Received %s' % (
+            ' '.join(str(messageProtocolEntity).split('\n')),
+        ))
+
+        try:
+            from_address = "+" + messageProtocolEntity.getFrom(False)
+            from_address = from_address.decode("UTF-8")
+            body = messageProtocolEntity.getBody().decode("UTF-8")
+        except UnicodeDecodeError:
+            message = ' '.join(str(messageProtocolEntity).split('\n'))
+            log.err('Cannot decode %r' % message)
+            reactor.callFromThread(
+                self.transport.handle_inbound_error,
+                'Cannot decode', '%r' % message)
+            return
 
         receipt = OutgoingReceiptProtocolEntity(
             messageProtocolEntity.getId(),
@@ -192,14 +223,13 @@ class WhatsAppInterface(YowInterfaceLayer):
             transport_type=self.transport.transport_type,
             to_addr_type=TransportUserMessage.AT_MSISDN,
             from_addr_type=TransportUserMessage.AT_MSISDN)
+        reactor.callFromThread(
+            self.transport.handle_inbound_success)
 
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
         '''receives confirmation of delivery to human'''
-        # shady?
-        log.debug("The user you attempted to contact has received the message")
-        log.debug("You are sending an acknowledgement of their accomplishment")
-        log.debug(entity.getType())
+        log.info('Received %s' % ' '.join(str(entity).split('\n')))
         ack = OutgoingAckProtocolEntity(
             entity.getId(), "receipt", entity.getType(), entity.getFrom())
         self.toLower(ack)
@@ -217,6 +247,6 @@ class WhatsAppInterface(YowInterfaceLayer):
         '''receives confirmation of delivery to server'''
         # sent_message_id: whatsapp id
         # user_message_id: vumi_id
-        log.debug('WhatsApp acknowledges your %s.' % ack.getClass())
+        log.info('Received %s' % ' '.join(str(ack).split('\n')))
         if ack.getClass() == "message":
             reactor.callFromThread(self.transport._send_ack, ack.getId())
