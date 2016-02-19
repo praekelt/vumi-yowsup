@@ -108,6 +108,7 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assertEqual(receipt.payload['delivery_status'], 'delivered')
 
     def add_auth_skip(self, number):
+        # Layer 2 is the axolotl authentication layer
         layer = self.transport.stack_client.stack.getLayer(2)
         jid = msisdn_to_whatsapp(number)
         layer.skipEncJids.append(jid)
