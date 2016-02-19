@@ -232,9 +232,9 @@ class TestWhatsAppTransport(VumiTestCase):
     def test_repeat_status(self):
         '''If two status messages are sent for the same component with the
         same status, only one of them should go through.'''
-        yield self.transport.add_status(
-            component='inbound', status='ok', type='inbound_success',
-            message='Inbound message successfully processed')
+        yield self.testing_layer.send_to_transport(
+            text='Hi Vumi! :)',
+            from_address='123345@s.whatsapp.net')
         yield self.transport.add_status(
             component='inbound', status='ok', type='inbound_success',
             message='Inbound message successfully processed')
