@@ -267,6 +267,6 @@ class WhatsAppInterface(YowInterfaceLayer):
         name = event.getName()
         if name == YowNetworkLayer.EVENT_STATE_CONNECTED:
             reactor.callFromThread(self.transport.handle_connected)
-        if name == YowNetworkLayer.EVENT_STATE_DISCONNECTED:
+        elif name == YowNetworkLayer.EVENT_STATE_DISCONNECTED:
             reactor.callFromThread(
                 self.transport.handle_disconnected, event.args.get('reason'))
