@@ -65,8 +65,8 @@ class WhatsAppTransport(Transport):
         self.our_msisdn = "+" + config.phone
         CREDENTIALS = (config.phone, config.password)
 
-        stack_client = self.stack_client = StackClient(CREDENTIALS, self)
-        self.client_d = deferToThread(stack_client.client_start)
+        self.stack_client = StackClient(CREDENTIALS, self)
+        self.client_d = deferToThread(self.stack_client.client_start)
         self.client_d.addErrback(self.catch_exit)
         self.client_d.addErrback(self.log_error)
 
@@ -144,10 +144,12 @@ class StackClient(object):
 
         self.network_layer = self.stack.getLayer(0)
         self.whatsapp_interface = self.stack.getLayer(-1)
+        self.connect_d = defer.Deferred()
 
     def client_start(self):
 
         self.whatsapp_interface.connect()
+        self.connect_d.callback(None)
 
         self.stack.loop(discrete=0, count=1, timeout=1)
 

@@ -71,6 +71,8 @@ class TestWhatsAppTransport(VumiTestCase):
         self.testing_layer = self.transport.stack_client.network_layer
         self.redis = self.transport.redis
 
+        yield self.transport.stack_client.connect_d
+
     def assert_id_format_correct(self, node):
         uuid, _sep, count = node["id"].partition('-')
         self.assertEqual(len(uuid), 10)
@@ -192,7 +194,7 @@ class TestWhatsAppTransport(VumiTestCase):
 
     @inlineCallbacks
     def test_non_ascii_publish(self):
-        message_sent = yield self.testing_layer.send_to_transport(
+        message_sent = self.testing_layer.send_to_transport(
             text=string_of_doom,
             from_address='123345@s.whatsapp.net')
         [message_received] = (
@@ -205,7 +207,7 @@ class TestWhatsAppTransport(VumiTestCase):
     def test_cannot_decode_message(self):
         '''When the inbound message cannot be decoded, we should send a
         degraded status message.'''
-        yield self.testing_layer.send_to_transport(
+        self.testing_layer.send_to_transport(
             text=u'Hi Vumi! :)'.encode('utf-16'),
             from_address='123345@s.whatsapp.net')
         [status] = yield self.tx_helper.wait_for_dispatched_statuses(1)
@@ -218,7 +220,7 @@ class TestWhatsAppTransport(VumiTestCase):
     def test_status_message_for_inbound_message(self):
         '''If we are successfully able to decode the inbound message, we should
         send a successful status message.'''
-        yield self.testing_layer.send_to_transport(
+        self.testing_layer.send_to_transport(
             text='Hi Vumi! :)',
             from_address='123345@s.whatsapp.net')
         [status] = yield self.tx_helper.wait_for_dispatched_statuses(1)
@@ -232,7 +234,7 @@ class TestWhatsAppTransport(VumiTestCase):
     def test_repeat_status(self):
         '''If two status messages are sent for the same component with the
         same status, only one of them should go through.'''
-        yield self.testing_layer.send_to_transport(
+        self.testing_layer.send_to_transport(
             text='Hi Vumi! :)',
             from_address='123345@s.whatsapp.net')
         yield self.transport.add_status(
