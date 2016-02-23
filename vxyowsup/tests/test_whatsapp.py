@@ -64,6 +64,7 @@ class TestWhatsAppTransport(VumiTestCase):
             'cc': '27',
             'phone': '27010203040',
             'password': base64.b64encode("xxx"),
+            'publish_status': True,
         }
 
         self.transport = yield self.tx_helper.get_transport(self.config)
@@ -199,6 +200,46 @@ class TestWhatsAppTransport(VumiTestCase):
         self.assert_messages_equal(
             PTNode_to_TUMessage(message_sent, '+27010203040'),
             message_received)
+
+    @inlineCallbacks
+    def test_cannot_decode_message(self):
+        '''When the inbound message cannot be decoded, we should send a
+        degraded status message.'''
+        yield self.testing_layer.send_to_transport(
+            text=u'Hi Vumi! :)'.encode('utf-16'),
+            from_address='123345@s.whatsapp.net')
+        [status] = yield self.tx_helper.wait_for_dispatched_statuses(1)
+        self.assertEqual(status['status'], 'degraded')
+        self.assertEqual(status['component'], 'inbound')
+        self.assertEqual(status['type'], 'inbound_error')
+        self.assertEqual(status['message'], 'Cannot decode')
+
+    @inlineCallbacks
+    def test_status_message_for_inbound_message(self):
+        '''If we are successfully able to decode the inbound message, we should
+        send a successful status message.'''
+        yield self.testing_layer.send_to_transport(
+            text='Hi Vumi! :)',
+            from_address='123345@s.whatsapp.net')
+        [status] = yield self.tx_helper.wait_for_dispatched_statuses(1)
+        self.assertEqual(status['status'], 'ok')
+        self.assertEqual(status['component'], 'inbound')
+        self.assertEqual(status['type'], 'inbound_success')
+        self.assertEqual(
+            status['message'], 'Inbound message successfully processed')
+
+    @inlineCallbacks
+    def test_repeat_status(self):
+        '''If two status messages are sent for the same component with the
+        same status, only one of them should go through.'''
+        yield self.testing_layer.send_to_transport(
+            text='Hi Vumi! :)',
+            from_address='123345@s.whatsapp.net')
+        yield self.transport.add_status(
+            component='inbound', status='ok', type='inbound_success',
+            message='Inbound message successfully processed')
+        statuses = yield self.tx_helper.get_dispatched_statuses()
+        self.assertEqual(len(statuses), 1)
 
 
 def dummy_getLayerInterface(parent_interface, layer_cls):
