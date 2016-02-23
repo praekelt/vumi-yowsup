@@ -17,6 +17,7 @@ from yowsup.layers.protocol_receipts.protocolentities import (
     OutgoingReceiptProtocolEntity)
 from yowsup.layers.protocol_acks.protocolentities import (
     OutgoingAckProtocolEntity)
+from yowsup.layers.network import YowNetworkLayer
 
 
 class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
@@ -127,6 +128,16 @@ class WhatsAppTransport(Transport):
         return self.add_status(
             component='inbound', status='ok', type='inbound_success',
             message='Inbound message successfully processed')
+
+    def handle_connected(self):
+        return self.add_status(
+            component='connection', status='ok', type='connected',
+            message='Successfully connected to server')
+
+    def handle_disconnected(self, reason):
+        return self.add_status(
+            component='connection', status='down', type='disconnected',
+            message=reason)
 
 
 class StackClient(object):
@@ -251,3 +262,10 @@ class WhatsAppInterface(YowInterfaceLayer):
         self.transport.log.info('Received %s' % ' '.join(str(ack).split('\n')))
         if ack.getClass() == "message":
             reactor.callFromThread(self.transport._send_ack, ack.getId())
+
+    def onEvent(self, event):
+        if event.getName() == YowNetworkLayer.EVENT_STATE_CONNECTED:
+            reactor.callFromThread(self.transport.handle_connected)
+        if event.getName() == YowNetworkLayer.EVENT_STATE_DISCONNECTED:
+            reactor.callFromThread(
+                self.transport.handle_disconnected, event.args.get('reason'))
