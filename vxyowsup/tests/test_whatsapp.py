@@ -20,6 +20,8 @@ from yowsup.layers.protocol_messages.protocolentities import (
 from yowsup.layers.protocol_acks.protocolentities import AckProtocolEntity
 from yowsup.layers.protocol_receipts.protocolentities import (
     IncomingReceiptProtocolEntity)
+from yowsup.layers.interface.interface import YowLayerEvent
+from yowsup.layers.network import YowNetworkLayer
 
 
 string_of_doom = u"Zoë the Destroyer of ASCII".encode("UTF-8")
@@ -243,6 +245,28 @@ class TestWhatsAppTransport(VumiTestCase):
         statuses = yield self.tx_helper.get_dispatched_statuses()
         self.assertEqual(len(statuses), 1)
 
+    @inlineCallbacks
+    def test_connect_status(self):
+        '''When we get a connection, the connection component status should
+        be "okay".'''
+        self.testing_layer.connect()
+        [status] = yield self.tx_helper.wait_for_dispatched_statuses(1)
+        self.assertEqual(status['status'], 'ok')
+        self.assertEqual(status['component'], 'connection')
+        self.assertEqual(status['type'], 'connected')
+        self.assertEqual(status['message'], 'Successfully connected to server')
+
+    @inlineCallbacks
+    def test_disconnect_status(self):
+        '''When we get a disconnection, the connection component status should
+        be "down".'''
+        self.testing_layer.disconnect()
+        [status] = yield self.tx_helper.wait_for_dispatched_statuses(1)
+        self.assertEqual(status['status'], 'down')
+        self.assertEqual(status['component'], 'connection')
+        self.assertEqual(status['type'], 'disconnected')
+        self.assertEqual(status['message'], 'Test disconnect')
+
 
 def dummy_getLayerInterface(parent_interface, layer_cls):
     if layer_cls.__name__ == 'YowNetworkLayer':
@@ -297,3 +321,11 @@ class TestingLayer(YowLayer):
             text, _from=from_address).toProtocolTreeNode()
         self.receive(message)
         return message
+
+    def connect(self):
+        self.emitEvent(YowLayerEvent(YowNetworkLayer.EVENT_STATE_CONNECTED))
+
+    def disconnect(self):
+        self.emitEvent(YowLayerEvent(
+            YowNetworkLayer.EVENT_STATE_DISCONNECTED,
+            reason='Test disconnect'))

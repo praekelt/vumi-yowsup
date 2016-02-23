@@ -4,7 +4,6 @@ from twisted.internet.threads import deferToThread
 
 from vumi.transports.base import Transport
 from vumi.config import ConfigText, ConfigDict, ConfigInt
-from vumi import log
 from vumi.message import TransportUserMessage
 from vumi.persist.txredis_manager import TxRedisManager
 from vumi.utils import StatusEdgeDetector
@@ -18,6 +17,7 @@ from yowsup.layers.protocol_receipts.protocolentities import (
     OutgoingReceiptProtocolEntity)
 from yowsup.layers.protocol_acks.protocolentities import (
     OutgoingAckProtocolEntity)
+from yowsup.layers.network import YowNetworkLayer
 
 
 class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
@@ -57,7 +57,7 @@ class WhatsAppTransport(Transport):
     @defer.inlineCallbacks
     def setup_transport(self):
         config = self.config = self.get_static_config()
-        log.info('Transport starting with: %s' % (config,))
+        self.log.info('Transport starting with: %s' % (config,))
 
         self.redis = yield TxRedisManager.from_config(config.redis_manager)
         self.redis = self.redis.sub_manager(self.transport_name)
@@ -74,11 +74,11 @@ class WhatsAppTransport(Transport):
 
     @defer.inlineCallbacks
     def teardown_transport(self):
-        log.info("Stopping client ...")
+        self.log.info("Stopping client ...")
         self.stack_client.client_stop()
         yield self.client_d
         yield self.redis._close()
-        log.info("Loop done.")
+        self.log.info("Loop done.")
 
     def add_status(self, **kw):
         '''Publishes a status if it is not a repeat of the previously
@@ -89,7 +89,7 @@ class WhatsAppTransport(Transport):
 
     def handle_outbound_message(self, message):
         # message is a vumi.message.TransportUserMessage
-        log.info('Sending message: %s' % (message.to_json(),))
+        self.log.info('Sending message: %s' % (message.to_json(),))
         msg = TextMessageProtocolEntity(
             message['content'].encode("UTF-8"),
             to=msisdn_to_whatsapp(message['to_addr']).encode("UTF-8"))
@@ -113,10 +113,10 @@ class WhatsAppTransport(Transport):
 
     def catch_exit(self, f):
         f.trap(WhatsAppClientDone)
-        log.info("Yowsup client killed.")
+        self.log.info("Yowsup client killed.")
 
     def log_error(self, f):
-        log.error(f)
+        self.log.error(f)
         return f
 
     def handle_inbound_error(self, error, message):
@@ -128,6 +128,16 @@ class WhatsAppTransport(Transport):
         return self.add_status(
             component='inbound', status='ok', type='inbound_success',
             message='Inbound message successfully processed')
+
+    def handle_connected(self):
+        return self.add_status(
+            component='connection', status='ok', type='connected',
+            message='Successfully connected to server')
+
+    def handle_disconnected(self, reason):
+        return self.add_status(
+            component='connection', status='down', type='disconnected',
+            message=reason)
 
 
 class StackClient(object):
@@ -154,10 +164,10 @@ class StackClient(object):
         self.stack.loop(discrete=0, count=1, timeout=1)
 
     def client_stop(self):
-        log.info("Stopping client ...")
+        self.transport.log.info("Stopping client ...")
 
         def _stop():
-            log.info("Sending disconnect ...")
+            self.transport.log.info("Sending disconnect ...")
             self.whatsapp_interface.disconnect()
 
         def _kill():
@@ -184,7 +194,7 @@ class WhatsAppInterface(YowInterfaceLayer):
 
     @ProtocolEntityCallback("message")
     def onMessage(self, messageProtocolEntity):
-        log.info('Received %s' % (
+        self.transport.log.info('Received %s' % (
             ' '.join(str(messageProtocolEntity).split('\n')),
         ))
 
@@ -194,7 +204,7 @@ class WhatsAppInterface(YowInterfaceLayer):
             body = messageProtocolEntity.getBody().decode("UTF-8")
         except UnicodeDecodeError:
             message = ' '.join(str(messageProtocolEntity).split('\n'))
-            log.err('Cannot decode %r' % message)
+            self.transport.log.err('Cannot decode %r' % message)
             reactor.callFromThread(
                 self.transport.handle_inbound_error,
                 'Cannot decode', '%r' % message)
@@ -207,9 +217,8 @@ class WhatsAppInterface(YowInterfaceLayer):
             messageProtocolEntity.getParticipant())
         self.toLower(receipt)
 
-        log.debug('You have received a message, and thusly sent a receipt')
         if self.echo_to:
-            log.debug(
+            self.transport.log.debug(
                 'Echoing message received by transport to %s' % self.echo_to)
             reactor.callFromThread(
                 self.transport.handle_outbound_message,
@@ -231,7 +240,8 @@ class WhatsAppInterface(YowInterfaceLayer):
     @ProtocolEntityCallback("receipt")
     def onReceipt(self, entity):
         '''receives confirmation of delivery to human'''
-        log.info('Received %s' % ' '.join(str(entity).split('\n')))
+        self.transport.log.info(
+            'Received %s' % ' '.join(str(entity).split('\n')))
         ack = OutgoingAckProtocolEntity(
             entity.getId(), "receipt", entity.getType(), entity.getFrom())
         self.toLower(ack)
@@ -249,6 +259,14 @@ class WhatsAppInterface(YowInterfaceLayer):
         '''receives confirmation of delivery to server'''
         # sent_message_id: whatsapp id
         # user_message_id: vumi_id
-        log.info('Received %s' % ' '.join(str(ack).split('\n')))
+        self.transport.log.info('Received %s' % ' '.join(str(ack).split('\n')))
         if ack.getClass() == "message":
             reactor.callFromThread(self.transport._send_ack, ack.getId())
+
+    def onEvent(self, event):
+        name = event.getName()
+        if name == YowNetworkLayer.EVENT_STATE_CONNECTED:
+            reactor.callFromThread(self.transport.handle_connected)
+        elif name == YowNetworkLayer.EVENT_STATE_DISCONNECTED:
+            reactor.callFromThread(
+                self.transport.handle_disconnected, event.args.get('reason'))
