@@ -72,6 +72,9 @@ class WhatsAppTransport(Transport):
 
         self.status_detect = StatusEdgeDetector()
 
+        # Wait for the WhatsApp client to connect before continuing.
+        yield self.stack_client.connect_d
+
     @defer.inlineCallbacks
     def teardown_transport(self):
         self.log.info("Stopping client ...")

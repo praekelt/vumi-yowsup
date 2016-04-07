@@ -73,8 +73,6 @@ class TestWhatsAppTransport(VumiTestCase):
         self.testing_layer = self.transport.stack_client.network_layer
         self.redis = self.transport.redis
 
-        yield self.transport.stack_client.connect_d
-
     def assert_id_format_correct(self, node):
         uuid, _sep, count = node["id"].partition('-')
         self.assertEqual(len(uuid), 10)
