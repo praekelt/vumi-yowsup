@@ -75,9 +75,13 @@ class WhatsAppTransport(Transport):
     @defer.inlineCallbacks
     def teardown_transport(self):
         self.log.info("Stopping client ...")
-        self.stack_client.client_stop()
-        yield self.client_d
-        yield self.redis._close()
+        if hasattr(self, 'stack_client'):
+            self.stack_client.client_stop()
+            yield self.client_d
+
+        if hasattr(self, 'redis'):
+            yield self.redis._close()
+
         self.log.info("Loop done.")
 
     def add_status(self, **kw):
