@@ -107,6 +107,8 @@ class WhatsAppTransport(Transport):
     @defer.inlineCallbacks
     def _send_ack(self, whatsapp_id):
         vumi_id = yield self.redis.get(whatsapp_id)
+        if vumi_id is None:
+            defer.returnValue(None)
         yield self.publish_ack(
             user_message_id=vumi_id, sent_message_id=whatsapp_id)
 
