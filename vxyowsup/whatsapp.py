@@ -148,6 +148,9 @@ class WhatsAppTransport(Transport):
             component='connection', status='down', type='disconnected',
             message=reason)
 
+    def handle_unknown_event(self, name):
+        self.log.info('Unhandled event received: %s' % name)
+
 
 class StackClient(object):
 
@@ -279,3 +282,6 @@ class WhatsAppInterface(YowInterfaceLayer):
         elif name == YowNetworkLayer.EVENT_STATE_DISCONNECTED:
             reactor.callFromThread(
                 self.transport.handle_disconnected, event.args.get('reason'))
+        else:
+            reactor.callFromThread(
+                self.transport.handle_unknown_event, name)
