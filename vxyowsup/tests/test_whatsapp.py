@@ -259,11 +259,18 @@ class TestWhatsAppTransport(VumiTestCase):
         '''When we get a disconnection, the connection component status should
         be "down".'''
         self.testing_layer.disconnect()
-        [status] = yield self.tx_helper.wait_for_dispatched_statuses(1)
+        [status, status_recon] = (
+            yield self.tx_helper.wait_for_dispatched_statuses(1))
         self.assertEqual(status['status'], 'down')
         self.assertEqual(status['component'], 'connection')
         self.assertEqual(status['type'], 'disconnected')
         self.assertEqual(status['message'], 'Test disconnect')
+
+        self.assertEqual(status_recon['status'], 'ok')
+        self.assertEqual(status_recon['component'], 'connection')
+        self.assertEqual(status_recon['type'], 'connected')
+        self.assertEqual(
+            status_recon['message'], 'Successfully connected to server')
 
 
 def dummy_getLayerInterface(parent_interface, layer_cls):
@@ -327,3 +334,8 @@ class TestingLayer(YowLayer):
         self.emitEvent(YowLayerEvent(
             YowNetworkLayer.EVENT_STATE_DISCONNECTED,
             reason='Test disconnect'))
+
+    def onEvent(self, event):
+        if event.getName() == YowNetworkLayer.EVENT_STATE_CONNECT:
+            # Automatically say that we're connected for connect requests
+            self.connect()
