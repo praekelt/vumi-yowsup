@@ -18,6 +18,7 @@ from yowsup.layers.protocol_receipts.protocolentities import (
 from yowsup.layers.protocol_acks.protocolentities import (
     OutgoingAckProtocolEntity)
 from yowsup.layers.network import YowNetworkLayer
+from yowsup.layers import YowLayerEvent
 
 
 class WhatsAppTransportConfig(Transport.CONFIG_CLASS):
@@ -282,6 +283,8 @@ class WhatsAppInterface(YowInterfaceLayer):
         elif name == YowNetworkLayer.EVENT_STATE_DISCONNECTED:
             reactor.callFromThread(
                 self.transport.handle_disconnected, event.args.get('reason'))
+            self.broadcastEvent(
+                YowLayerEvent(YowNetworkLayer.EVENT_STATE_CONNECT))
         else:
             reactor.callFromThread(
                 self.transport.handle_unknown_event, name)
